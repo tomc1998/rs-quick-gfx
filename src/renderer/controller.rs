@@ -71,4 +71,41 @@ impl RendererController {
     // Send the data
     self.sender.send(data).unwrap();
   }
+
+  /// Draws a circle.
+  /// # Params
+  /// * `pos` The position on screen of the circle
+  /// * `rad` The radius of the circle
+  /// * `segments` The number of triangle segments to use when drawing. More = smoother circle.
+  /// * `col` - The colour of the circle.
+  pub fn circle(&self, pos: &[f32; 2], rad: f32, segments: usize, col: &[f32; 4]) {
+    use std::f64::consts::PI;
+    let mut data = Vec::with_capacity(segments*3);
+    let mut curr_angle = 0.0f32;
+    let angle_increment = 2.0*(PI as f32)*(1.0 / segments as f32);
+    for _ in 0..segments {
+      // Vertex at the centre of the circle
+      data.push(Vertex {pos: pos.clone(), col: col.clone()});
+
+      // Other two vertices of the triangle
+      data.push(Vertex {
+        pos: [
+          pos[0] + rad*(curr_angle.cos()), 
+          pos[1] + rad*(curr_angle.sin())], 
+        col: col.clone()
+      });
+      data.push(Vertex {
+        pos: [
+          pos[0] + rad*((curr_angle+angle_increment).cos()), 
+          pos[1] + rad*((curr_angle+angle_increment).sin())], 
+        col: col.clone()
+      });
+      
+      // Increment the angle for the next loop
+      curr_angle += angle_increment;
+    }
+
+    // Send the data
+    self.sender.send(data).unwrap();
+  }
 }
