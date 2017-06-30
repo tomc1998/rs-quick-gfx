@@ -35,6 +35,17 @@ impl QGFX {
     return self.renderer.get_renderer_controller();
   }
 
+  /// Get the size of the display in pixels.
+  /// # Returns
+  /// An option containing the display size. Glium's methods can sometimes
+  /// return none, but most likely the result will be Some and you needn't
+  /// check for None before unwrapping.
+  pub fn get_display_size(&self) -> Option<(i32, i32)> {
+    let win = self.display.get_window();
+    if win.is_none() { None }
+    else { win.unwrap().get_position() }
+  }
+
   /// Receive all the data sent by renderer controllers. This should be called
   /// before rendering to make sure the data is up to date.
   pub fn recv_data(&mut self) {
