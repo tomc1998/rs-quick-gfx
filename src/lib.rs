@@ -1,31 +1,36 @@
 #[macro_use]
 extern crate glium;
-extern crate nalgebra;
 
 mod renderer;
+mod vec;
 
 pub use renderer::RendererController;
-pub use glium::backend::glutin_backend::PollEventsIter;
 pub use glium::glutin::Event;
+pub use glium::glutin::WindowEvent;
+pub use glium::glutin::DeviceEvent;
 
-use glium::backend::glutin_backend::GlutinFacade;
+use glium::Display;
+use glium::glutin::EventsLoop;
 use renderer::Renderer;
+use std::sync::Mutex;
 
 
 /// The API of the library.
 pub struct QGFX {
   renderer: Box<Renderer>,
-  display: GlutinFacade,
+  display: Display,
+  events_loop: Mutex<EventsLoop>,
 }
 
 impl QGFX {
   /// Create a display with a renderer and return it. This function will open a window.
   pub fn new() -> QGFX {
-    let display = init_display();
+    let (display, events_loop) = init_display();
     let renderer = Renderer::new(&display);
     QGFX { 
       renderer: renderer,
-      display: display 
+      display: display,
+      events_loop: Mutex::new(events_loop),
     }
   }
 
@@ -36,14 +41,8 @@ impl QGFX {
   }
 
   /// Get the size of the display in pixels.
-  /// # Returns
-  /// An option containing the display size. Glium's methods can sometimes
-  /// return none, but most likely the result will be Some and you needn't
-  /// check for None before unwrapping.
-  pub fn get_display_size(&self) -> Option<(i32, i32)> {
-    let win = self.display.get_window();
-    if win.is_none() { None }
-    else { win.unwrap().get_position() }
+  pub fn get_display_size(&self) -> (u32, u32) {
+    self.display.get_framebuffer_dimensions()
   }
 
   /// Receive all the data sent by renderer controllers. This should be called
@@ -60,15 +59,31 @@ impl QGFX {
     target.finish().unwrap();
   }
 
-  pub fn poll_events(&self) -> PollEventsIter {
-    self.display.poll_events()
+  /// Poll events on this window. If there are any events available, call the
+  /// provided callback F with the given event as an argument.
+  /// This will lock the events loop inside this structure. It will panic if
+  /// the mutex lock is poisoned. This is intentional (Rather a panic than
+  /// something as crucial as an event loop erroring silently).
+  pub fn poll_events<F: FnMut(Event) -> ()>(&self, callback: F) {
+    self.events_loop.lock().unwrap().poll_events(callback)
   }
 }
 
-fn init_display() -> GlutinFacade {
-    use glium::DisplayBuild;
-    glium::glutin::WindowBuilder::new()
-      .build_glium().unwrap()
+fn init_display() -> (Display, EventsLoop) {
+  // 1. The **winit::EventsLoop** for handling events.
+  let mut events_loop = glium::glutin::EventsLoop::new();
+
+  // 2. Parameters for building the Window.
+  let window = glium::glutin::WindowBuilder::new()
+    .with_dimensions(1024, 768)
+    .with_title("Hello world");
+
+  // 3. Parameters for building the OpenGL context.
+  let context = glium::glutin::ContextBuilder::new();
+
+  // 4. Build the Display with the given window and OpenGL context parameters and register the
+  //    window with the events_loop.
+  (glium::Display::new(window, context, &events_loop).unwrap(), events_loop)
 }
 
 

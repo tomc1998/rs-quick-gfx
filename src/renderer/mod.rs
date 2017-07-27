@@ -9,7 +9,6 @@ pub use self::controller::RendererController;
 use std::sync::mpsc;
 
 use glium::{self, VertexBuffer};
-use glium::backend::glutin_backend::GlutinFacade;
 
 /// The constant size of the renderer's VBO in vertices (i.e. can contain 1024 vertices)
 pub const VBO_SIZE : usize = 65563;
@@ -48,8 +47,8 @@ impl Renderer {
   /// * `display` - The glutin display (OpenGL Context)
   /// * `system` - The SysRenderer being used by the ECS. When rendering,
   ///              vertex data will be buffered from here.
-  pub fn new(display: &GlutinFacade) -> Box<Renderer> {
-    let (w, h) = display.get_window().unwrap().get_inner_size().unwrap();
+  pub fn new(display: &glium::Display) -> Box<Renderer> {
+    let (w, h) = display.get_framebuffer_dimensions();
     Box::new(Renderer {
       vbo: VertexBuffer::empty_dynamic(display, VBO_SIZE).unwrap(),
       program: shader::get_program(display),

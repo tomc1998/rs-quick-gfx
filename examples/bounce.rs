@@ -8,7 +8,7 @@ fn main() {
   let controller = qgfx.get_renderer_controller();
 
   // Get display size
-  let (mut win_w, mut win_h) = qgfx.get_display_size().unwrap();
+  let (mut win_w, mut win_h) = qgfx.get_display_size();
 
   // Keep track of the ball's position, vel, and ball_radius (radius changes when screen size changes)
   let mut ball_pos = [win_w as f32 / 2.0, win_h as f32 / 2.0];
@@ -18,23 +18,29 @@ fn main() {
   // How much gravity there is (number which is applied to velocity every loop
   const GRAVITY : f32 = 1.0;
 
-  loop {
+  let mut closed = false;
+  while !closed {
     // Check whether the user requested a close or if the display size has
     // changed
-    for ev in qgfx.poll_events() {
+    qgfx.poll_events(|ev| {
       match ev {
-        quick_gfx::Event::Closed => return,
-        quick_gfx::Event::Resized(new_w, new_h) => {
-          // Window size has changed, reset the ball_radius and position of the ball
-          ball_pos = [new_w as f32 / 2.0, new_h as f32 / 2.0];
-          ball_rad = min(new_w / 10, new_h / 10) as f32;
-          // Update win size
-          win_w = new_w as i32;
-          win_h = new_h as i32;
+        quick_gfx::Event::WindowEvent{event: ev, ..} => {
+          match ev {
+            quick_gfx::WindowEvent::Closed => closed = true,
+            quick_gfx::WindowEvent::Resized(new_w, new_h) => {
+              // Window size has changed, reset the ball_radius and position of the ball
+              ball_pos = [new_w as f32 / 2.0, new_h as f32 / 2.0];
+              ball_rad = min(new_w / 10, new_h / 10) as f32;
+              // Update win size
+              win_w = new_w;
+              win_h = new_h;
+            }
+            _ => ()
+          }
         }
         _ => ()
       }
-    }
+    });
 
     // Apply ball pos / vel
     ball_vel[1] += GRAVITY;

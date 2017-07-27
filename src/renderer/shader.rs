@@ -1,8 +1,7 @@
 use glium;
-use glium::backend::glutin_backend::GlutinFacade;
 
 /// Convenience method to compile the shader program used by the renderer.
-pub fn get_program(display: &GlutinFacade) -> glium::Program {
+pub fn get_program(display: &glium::Display) -> glium::Program {
   let v_shader = r#"
     #version 130
 

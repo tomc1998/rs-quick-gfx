@@ -16,14 +16,20 @@ fn main() {
   g.recv_data();
 
   // Now that the renderer has the data, we can draw it.
-  loop {
+  let mut closed = false;
+  while !closed {
     // Poll events to check if window has been closed
-    for ev in g.poll_events() {
+    g.poll_events(|ev| {
       match ev {
-        quick_gfx::Event::Closed => return,
+        quick_gfx::Event::WindowEvent{event: ev, window_id: _} => {
+          match ev {
+            quick_gfx::WindowEvent::Closed => closed = true,
+            _ => ()
+          }
+        },
         _ => ()
       }
-    }
+    });
 
     // Render everything
     g.render();
