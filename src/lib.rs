@@ -73,7 +73,7 @@ impl QGFX {
 
 fn init_display() -> (Display, EventsLoop) {
   // 1. The **winit::EventsLoop** for handling events.
-  let mut events_loop = glium::glutin::EventsLoop::new();
+  let events_loop = glium::glutin::EventsLoop::new();
 
   // 2. Parameters for building the Window.
   let window = glium::glutin::WindowBuilder::new()
