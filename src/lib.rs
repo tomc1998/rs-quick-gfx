@@ -1,5 +1,6 @@
 #[macro_use]
 extern crate glium;
+extern crate winit;
 
 mod renderer;
 mod vec;
@@ -8,6 +9,7 @@ pub use renderer::RendererController;
 pub use glium::glutin::Event;
 pub use glium::glutin::WindowEvent;
 pub use glium::glutin::DeviceEvent;
+pub use winit::{VirtualKeyCode, ElementState};
 
 use glium::Display;
 use glium::glutin::EventsLoop;
