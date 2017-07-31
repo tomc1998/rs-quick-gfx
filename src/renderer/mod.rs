@@ -7,8 +7,8 @@ mod controller;
 pub use self::controller::RendererController;
 
 use std::sync::mpsc;
-
 use glium::{self, VertexBuffer};
+use res::font::glium_cache::GliumFontCache;
 
 /// The constant size of the renderer's VBO in vertices (i.e. can contain 1024 vertices)
 pub const VBO_SIZE : usize = 65563;
@@ -16,9 +16,10 @@ pub const VBO_SIZE : usize = 65563;
 #[derive(Copy, Clone, Debug)]
 pub struct Vertex {
   pub pos: [f32; 2],
+  pub tex_coords: [f32; 2],
   pub col: [f32; 4],
 }
-implement_vertex!(Vertex, pos, col);
+implement_vertex!(Vertex, pos, tex_coords, col);
 
 pub struct Renderer {
   /// The VBO to use. This will have data buffered to it when render() is called.
@@ -39,6 +40,8 @@ pub struct Renderer {
 
   /// The projection matrix used to render the game. 
   proj_mat: [[f32; 4]; 4],
+
+  pub font_cache: GliumFontCache,
 }
 
 impl Renderer {
@@ -49,11 +52,13 @@ impl Renderer {
   ///              vertex data will be buffered from here.
   pub fn new(display: &glium::Display) -> Box<Renderer> {
     let (w, h) = display.get_framebuffer_dimensions();
+    let font_cache = GliumFontCache::new(display);
     Box::new(Renderer {
       vbo: VertexBuffer::empty_dynamic(display, VBO_SIZE).unwrap(),
       program: shader::get_program(display),
       v_data: Vec::new(),
       v_channel_pair: mpsc::channel(),
+      font_cache: font_cache,
       proj_mat: [[2.0/w as f32, 0.0,           0.0, -0.0],
                  [0.0,         -2.0/h as f32,  0.0,  0.0],
                  [0.0,          0.0,          -1.0,  0.0],
@@ -91,7 +96,7 @@ impl Renderer {
     }
 
     while self.v_data.len() < VBO_SIZE {
-      self.v_data.push(Vertex { pos: [0.0; 2], col: [0.0; 4] } );
+      self.v_data.push(Vertex { pos: [0.0; 2], col: [0.0; 4], tex_coords: [0.0, 0.0] } );
     }
   }
 
@@ -103,9 +108,10 @@ impl Renderer {
     // Write the vertex data to the VBO
     self.vbo.write(&self.v_data);
 
-    // Load the projection matrix into the uniforms
+    // Load the uniforms
     let uniforms = uniform! {
       proj_mat: self.proj_mat,
+      tex: self.font_cache.get_tex(),
     };
 
     // Draw everything!

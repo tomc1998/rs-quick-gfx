@@ -10,7 +10,7 @@ fn main() {
   // on the controller:
 
   // Draw a green rectangle at (0, 0) with dimensions (100, 100).
-  controller.rect(&[0.0, 0.0, 100.0, 100.0], &[0.0, 1.0, 0.0, 1.0]);
+  controller.rect(&[0.0, 0.0, 256.0, 256.0], &[0.0, 1.0, 0.0, 1.0]);
 
   // Once we've send the data, we need to have the renderer receive it.
   g.recv_data();

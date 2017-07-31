@@ -1,9 +1,11 @@
 #[macro_use]
 extern crate glium;
 extern crate winit;
+extern crate rusttype;
 
 mod renderer;
 mod vec;
+mod res;
 
 pub use renderer::RendererController;
 pub use glium::glutin::Event;
@@ -15,6 +17,7 @@ use glium::Display;
 use glium::glutin::EventsLoop;
 use renderer::Renderer;
 use std::sync::Mutex;
+use res::font::glium_cache::GliumFontCache;
 
 
 /// The API of the library.
@@ -27,8 +30,10 @@ pub struct QGFX {
 impl QGFX {
   /// Create a display with a renderer and return it. This function will open a window.
   pub fn new() -> QGFX {
+    use res::font::FontCache;
     let (display, events_loop) = init_display();
-    let renderer = Renderer::new(&display);
+    let mut renderer = Renderer::new(&display);
+    renderer.font_cache.cache_glyphs("Arial Unicode.ttf", 24.0, &['a', 'b', 'c'][..]).unwrap();
     QGFX { 
       renderer: renderer,
       display: display,

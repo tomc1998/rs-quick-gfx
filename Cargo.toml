@@ -6,3 +6,4 @@ authors = ["Thomas Cheng <thomascheng1998@googlemail.com>"]
 [dependencies]
 glium = "*"
 winit = "*"
+rusttype = "*"

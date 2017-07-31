@@ -38,14 +38,14 @@ impl RendererController {
 
     // Generate the vertex data
     // tri 1
-    data.push(Vertex{ pos: [perp_l_1[0], perp_l_1[1]], col: col.clone()});
-    data.push(Vertex{ pos: [perp_r_1[0], perp_r_1[1]], col: col.clone()});
-    data.push(Vertex{ pos: [perp_l_2[0], perp_l_2[1]], col: col.clone()});
+    data.push(Vertex{ pos: [perp_l_1[0], perp_l_1[1]], col: col.clone(), tex_coords: [0.0, 0.0]});
+    data.push(Vertex{ pos: [perp_r_1[0], perp_r_1[1]], col: col.clone(), tex_coords: [0.0, 0.0]});
+    data.push(Vertex{ pos: [perp_l_2[0], perp_l_2[1]], col: col.clone(), tex_coords: [0.0, 0.0]});
 
     // tri 2
-    data.push(Vertex{ pos: [perp_l_2[0], perp_l_2[1]], col: col.clone()});
-    data.push(Vertex{ pos: [perp_r_2[0], perp_r_2[1]], col: col.clone()});
-    data.push(Vertex{ pos: [perp_r_1[0], perp_r_1[1]], col: col.clone()});
+    data.push(Vertex{ pos: [perp_l_2[0], perp_l_2[1]], col: col.clone(), tex_coords: [0.0, 0.0]});
+    data.push(Vertex{ pos: [perp_r_2[0], perp_r_2[1]], col: col.clone(), tex_coords: [0.0, 0.0]});
+    data.push(Vertex{ pos: [perp_r_1[0], perp_r_1[1]], col: col.clone(), tex_coords: [0.0, 0.0]});
 
     // Send the vertex data through the sender
     self.sender.send(data).unwrap();
@@ -60,14 +60,14 @@ impl RendererController {
 
     // Generate vertex data
     // Tri 1
-    data.push( Vertex { pos: [aabb[0], aabb[1]], col: col.clone() });
-    data.push( Vertex { pos: [aabb[0] + aabb[2], aabb[1]], col: col.clone() });
-    data.push( Vertex { pos: [aabb[0] + aabb[2], aabb[1] + aabb[3]], col: col.clone() });
+    data.push( Vertex { pos: [aabb[0], aabb[1]], col: col.clone(), tex_coords: [0.0, 0.0] });
+    data.push( Vertex { pos: [aabb[0] + aabb[2], aabb[1]], col: col.clone(), tex_coords: [1.0, 0.0] });
+    data.push( Vertex { pos: [aabb[0] + aabb[2], aabb[1] + aabb[3]], col: col.clone(), tex_coords: [1.0, 1.0] });
 
     // Tri 2
-    data.push( Vertex { pos: [aabb[0], aabb[1]], col: col.clone() });
-    data.push( Vertex { pos: [aabb[0], aabb[1] + aabb[3]], col: col.clone() });
-    data.push( Vertex { pos: [aabb[0] + aabb[2], aabb[1] + aabb[3]], col: col.clone() });
+    data.push( Vertex { pos: [aabb[0], aabb[1]], col: col.clone(), tex_coords: [0.0, 0.0] });
+    data.push( Vertex { pos: [aabb[0], aabb[1] + aabb[3]], col: col.clone(), tex_coords: [0.0, 1.0] });
+    data.push( Vertex { pos: [aabb[0] + aabb[2], aabb[1] + aabb[3]], col: col.clone(), tex_coords: [1.0, 1.0] });
 
     // Send the data
     self.sender.send(data).unwrap();
@@ -86,20 +86,20 @@ impl RendererController {
     let angle_increment = 2.0*(PI as f32)*(1.0 / segments as f32);
     for _ in 0..segments {
       // Vertex at the centre of the circle
-      data.push(Vertex {pos: pos.clone(), col: col.clone()});
+      data.push(Vertex {pos: pos.clone(), col: col.clone(), tex_coords: [0.0, 0.0]});
 
       // Other two vertices of the triangle
       data.push(Vertex {
         pos: [
           pos[0] + rad*(curr_angle.cos()), 
           pos[1] + rad*(curr_angle.sin())], 
-        col: col.clone()
+        col: col.clone(), tex_coords: [0.0, 0.0]
       });
       data.push(Vertex {
         pos: [
           pos[0] + rad*((curr_angle+angle_increment).cos()), 
           pos[1] + rad*((curr_angle+angle_increment).sin())], 
-        col: col.clone()
+        col: col.clone(), tex_coords: [0.0, 0.0]
       });
       
       // Increment the angle for the next loop
