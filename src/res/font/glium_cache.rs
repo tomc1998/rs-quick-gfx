@@ -21,6 +21,14 @@ pub struct GliumFontCache {
   /// The texture storage for the font cache.
   cache_tex: glium::texture::Texture2d,
 }
+impl std::fmt::Debug for GliumFontCache {
+  fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+    write!(f, r#"GliumFontCache {{ font_handles: BTreeMap, 
+           glyphs: BTreeMap, curr_font_handle: {:?}, 
+           cache: rusttype::gpu_cache::Cache, cache_tex: Texture2d }}"#, 
+           self.curr_font_handle)
+  }
+}
 
 impl GliumFontCache {
   pub fn new(display: &glium::Display) -> GliumFontCache {
