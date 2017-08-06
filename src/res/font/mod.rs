@@ -50,6 +50,19 @@ impl std::convert::From<std::io::Error> for CacheGlyphError {
   fn from(e: std::io::Error) -> Self { CacheGlyphError::IoError(e) }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct CacheReadError;
+impl Display for CacheReadError {
+  fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
+    use std::error::Error;
+    write!(f, "{}", self.description())
+  }
+}
+
+impl std::error::Error for CacheReadError {
+  fn description(&self) -> &str { "The requested glyph was not in the cache" }
+}
+
 /// A trait for a GPU font cache. Glyphs are loaded into the font cache,
 /// which are stored on the GPU for fast access when rendering text.
 pub trait FontCache { 
@@ -66,7 +79,17 @@ pub trait FontCache {
   /// Will return a CacheGlyph error if this function failed to add the glyphs to the cache.
   fn cache_glyphs<F: AsRef<Path>>(&mut self, file: F, scale: f32, charset: &[char]) 
     -> Result<(), CacheGlyphError>;
+
+  /// A function to look up the texture coordinates of a given glyph.
+  /// # Params
+  /// * `font_handle` - The handle of the font this glyph was cached into with.
+  /// * `code_point` - The code_point of the glyph to look up
+  /// # Errors
+  /// Will return a CacheReadError if the glyph was not cached.
+  fn rect_for(&self, font_handle: FontHandle, code_point: char) 
+    -> Result<(f32, f32, f32, f32), CacheReadError>;
 }
+
 
 /// A struct containing data to uniquely identify a font. Fonts are identified
 /// by paths and sizes - so if you have 2 identical font files, but stored at

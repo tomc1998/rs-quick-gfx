@@ -17,23 +17,21 @@ use glium::Display;
 use glium::glutin::EventsLoop;
 use renderer::Renderer;
 use std::sync::Mutex;
-use res::font::glium_cache::GliumFontCache;
 
 
 /// The API of the library.
-pub struct QGFX {
-  renderer: Box<Renderer>,
+pub struct QGFX<'a> {
+  renderer: Box<Renderer<'a>>,
   display: Display,
   events_loop: Mutex<EventsLoop>,
 }
 
-impl QGFX {
+impl<'a> QGFX<'a> {
   /// Create a display with a renderer and return it. This function will open a window.
-  pub fn new() -> QGFX {
-    use res::font::FontCache;
+  pub fn new() -> QGFX<'a> {
     let (display, events_loop) = init_display();
-    let mut renderer = Renderer::new(&display);
-    renderer.font_cache.cache_glyphs("Arial Unicode.ttf", 24.0, &['a', 'b', 'c'][..]).unwrap();
+    let renderer = Renderer::new(&display);
+    renderer.cache_glyphs("Arial Unicode.ttf", 24.0, &['a', 'b', 'c'][..]).unwrap();
     QGFX { 
       renderer: renderer,
       display: display,
@@ -43,7 +41,7 @@ impl QGFX {
 
   /// Get a renderer controller to send VBO data to this renderer. These can be
   /// cloned.
-  pub fn get_renderer_controller(&self) -> RendererController {
+  pub fn get_renderer_controller(&self) -> Box<RendererController<'a>> {
     return self.renderer.get_renderer_controller();
   }
 

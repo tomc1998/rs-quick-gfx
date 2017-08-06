@@ -1,20 +1,38 @@
 use renderer::Vertex;
+use std;
 use std::sync::mpsc;
+use std::sync::{Mutex, Arc};
+use res::font::glium_cache::GliumFontCache;
+use res::font::FontHandle;
 use vec::Vec2;
+
+#[derive(Copy, Clone, Hash, Debug)]
+pub struct RenderTextError;
+impl std::fmt::Display for RenderTextError {
+  fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+    use std::error::Error;
+    write!(f, "{}", self.description())
+  }
+}
+impl std::error::Error for RenderTextError {
+  fn description(&self) -> &'static str { "Text rendering failed - not all glyphs were cached." }
+}
 
 /// This struct wraps a Sender<Vec<Vertex>>, and has convenience methods to
 /// draw certain geometry.
 #[derive(Clone, Debug)]
-pub struct RendererController {
+pub struct RendererController<'a> {
+  font_cache: Arc<Mutex<GliumFontCache<'a>>>,
   sender: mpsc::Sender<Vec<Vertex>>,
 }
 
-impl RendererController {
+impl<'a> RendererController<'a> {
   /// Creates a new renderer controller with a given mpsc sender. If you want
   /// to get a renderer controller, look at the
   /// renderer::Renderer::get_renderer_controller() function.
-  pub fn new(sender: mpsc::Sender<Vec<Vertex>>) -> RendererController {
-    RendererController { sender: sender, }
+  pub fn new(sender: mpsc::Sender<Vec<Vertex>>, 
+             font_cache: Arc<Mutex<GliumFontCache<'a>>>) -> Box<RendererController<'a>> {
+    Box::new(RendererController { sender: sender, font_cache: font_cache })
   }
 
   /// Draws a line given a start and an endpoint.
@@ -29,7 +47,7 @@ impl RendererController {
     let p2 = Vec2(p2);
     let half_w = w/2.0;
     let p1p2 = p2.sub(p1);
-    
+
     // Get the 4 corners of the 'rectangle' (the line is just a rectangle)
     let perp_l_1 = Vec2([-p1p2[1], p1p2[0]]).nor().mul(half_w).add(p1);
     let perp_r_1 = Vec2([p1p2[1], -p1p2[0]]).nor().mul(half_w).add(p1);
@@ -101,12 +119,32 @@ impl RendererController {
           pos[1] + rad*((curr_angle+angle_increment).sin())], 
         col: col.clone(), tex_coords: [0.0, 0.0]
       });
-      
+
       // Increment the angle for the next loop
       curr_angle += angle_increment;
     }
 
     // Send the data
     self.sender.send(data).unwrap();
+  }
+
+  /// Render some text. 
+  /// # Params
+  /// * `text` - The text to render
+  /// * `pos` - The position to render the text at - this is the bottom left of the first character.
+  /// * `font_handle` - This is the font to render the text with.
+  /// # Returns
+  /// Error if not all the glyphs for this font were cached. To cache glyphs,
+  /// use the cache_glyphs method on your QGFX instance.
+  pub fn text(&self, text: &str, pos: &[f32; 2], font_handle: FontHandle) -> Result<(), RenderTextError>{
+    let font_cache = self.font_cache.lock().unwrap();
+    for c in text.chars() {
+      // Get the UV rect for this char
+      let glyph = font_cache.get_glyph(font_handle, c);
+      if glyph.is_none() { return Err(RenderTextError); }
+      let glyph = glyph.unwrap();
+      
+    }
+    return Ok(());
   }
 }

@@ -6,9 +6,12 @@ mod controller;
 
 pub use self::controller::RendererController;
 
+use std::path::Path;
 use std::sync::mpsc;
+use std::sync::{Mutex, Arc};
 use glium::{self, VertexBuffer};
 use res::font::glium_cache::GliumFontCache;
+use res::font::CacheGlyphError;
 
 /// The constant size of the renderer's VBO in vertices (i.e. can contain 1024 vertices)
 pub const VBO_SIZE : usize = 65563;
@@ -21,7 +24,7 @@ pub struct Vertex {
 }
 implement_vertex!(Vertex, pos, tex_coords, col);
 
-pub struct Renderer {
+pub struct Renderer<'a> {
   /// The VBO to use. This will have data buffered to it when render() is called.
   vbo: VertexBuffer<Vertex>,
 
@@ -41,16 +44,16 @@ pub struct Renderer {
   /// The projection matrix used to render the game. 
   proj_mat: [[f32; 4]; 4],
 
-  pub font_cache: GliumFontCache,
+  font_cache: Arc<Mutex<GliumFontCache<'a>>>,
 }
 
-impl Renderer {
+impl<'a> Renderer<'a>{
   /// Create a new renderer.
   /// # Params
   /// * `display` - The glutin display (OpenGL Context)
   /// * `system` - The SysRenderer being used by the ECS. When rendering,
   ///              vertex data will be buffered from here.
-  pub fn new(display: &glium::Display) -> Box<Renderer> {
+  pub fn new(display: &glium::Display) -> Box<Renderer<'a>> {
     let (w, h) = display.get_framebuffer_dimensions();
     let font_cache = GliumFontCache::new(display);
     Box::new(Renderer {
@@ -58,7 +61,7 @@ impl Renderer {
       program: shader::get_program(display),
       v_data: Vec::new(),
       v_channel_pair: mpsc::channel(),
-      font_cache: font_cache,
+      font_cache: Arc::new(Mutex::new(font_cache)),
       proj_mat: [[2.0/w as f32, 0.0,           0.0, -0.0],
                  [0.0,         -2.0/h as f32,  0.0,  0.0],
                  [0.0,          0.0,          -1.0,  0.0],
@@ -108,10 +111,13 @@ impl Renderer {
     // Write the vertex data to the VBO
     self.vbo.write(&self.v_data);
 
+    let font_cache = self.font_cache.lock().unwrap();
+    let tex = font_cache.get_tex();
+
     // Load the uniforms
     let uniforms = uniform! {
       proj_mat: self.proj_mat,
-      tex: self.font_cache.get_tex(),
+      tex: tex,
     };
 
     // Draw everything!
@@ -125,8 +131,18 @@ impl Renderer {
   /// # Returns
   /// A Sender<Vertex> for sending vertex data to the renderer. When
   /// render() is called, this data will be rendered then cleared.
-  pub fn get_renderer_controller(&self) -> RendererController {
-    return RendererController::new(self.v_channel_pair.0.clone());
+  pub fn get_renderer_controller(&self) -> Box<RendererController<'a>> {
+    RendererController::new(self.v_channel_pair.0.clone(), self.font_cache.clone())
+  }
+
+  /// A function to add the given chars to the cache. See res::font::FontCache
+  /// for more details. This wraps the font_cache stored inside the renderer.
+  /// This locks the mutex on the font cache, so any font rendering or caching
+  /// on other threads will also be blocked for the duration.
+  pub fn cache_glyphs<F: AsRef<Path>>(&self, file: F, scale: f32, 
+                                      charset: &[char]) -> Result<(), CacheGlyphError> {
+    use res::font::FontCache;
+    self.font_cache.lock().unwrap().cache_glyphs(file, scale, charset)
   }
 }
 

@@ -1,18 +1,21 @@
 use glium;
-use rusttype::{self, FontCollection};
+use rusttype::{self, PositionedGlyph, FontCollection, Font};
 use std;
 use std::collections::BTreeMap;
 use std::borrow::Cow;
 use std::path::Path;
 
-use res::font::{FontCache, CacheGlyphError, FontSpec, FontHandle};
+use res::font::{FontCache, CacheGlyphError, CacheReadError, FontSpec, FontHandle};
 
 /// An implementation of a font cache using glium to cache the glyph textures
 /// in vRAM.
-pub struct GliumFontCache {
+pub struct GliumFontCache<'a> {
   /// A map of font specs to handles. If a font spec is loaded again, it will
   /// be stored under the same font handle as before.
   font_handles: BTreeMap<FontSpec, FontHandle>,
+  /// A map of font handles to actual font objects, with an associated x and y
+  /// scale.
+  fonts: BTreeMap<FontHandle, (Font<'a>, (f32, f32))>,
   /// A counter for the next font handle. This will always store the value of
   /// the next available font handle.
   curr_font_handle: FontHandle,
@@ -21,7 +24,7 @@ pub struct GliumFontCache {
   /// The texture storage for the font cache.
   cache_tex: glium::texture::Texture2d,
 }
-impl std::fmt::Debug for GliumFontCache {
+impl<'a> std::fmt::Debug for GliumFontCache<'a> {
   fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
     write!(f, r#"GliumFontCache {{ font_handles: BTreeMap, 
            glyphs: BTreeMap, curr_font_handle: {:?}, 
@@ -30,12 +33,13 @@ impl std::fmt::Debug for GliumFontCache {
   }
 }
 
-impl GliumFontCache {
-  pub fn new(display: &glium::Display) -> GliumFontCache {
+impl<'a> GliumFontCache<'a> {
+  pub fn new(display: &glium::Display) -> GliumFontCache<'a> {
     const CACHE_W : u32 = 256;
     const CACHE_H : u32 = 256;
     GliumFontCache {
       font_handles: BTreeMap::new(),
+      fonts: BTreeMap::new(),
       curr_font_handle: FontHandle(0),
       // 2048 * 2048 cache with 0.1 scale and position fault tolerance.
       cache: rusttype::gpu_cache::Cache::new(CACHE_W, CACHE_H, 0.1, 0.1),
@@ -53,6 +57,27 @@ impl GliumFontCache {
     }
   }
 
+  /// A function to get a glyph in the cache, given a font handle and a character.
+  /// # Returns
+  /// * Some(glyph) if the glyph was found.
+  /// * None if the glyph has never been cached.
+  /// # Notes
+  /// This function returning Some is NOT a guarantee that the given glyph is
+  /// currently store in the cache, and requesting a texture rect for the given
+  /// glyph may still not return a value.
+  pub fn get_glyph(&self, fh: FontHandle, c: char) -> Option<PositionedGlyph> {
+    let f_x_y = self.fonts.get(&fh);
+    if f_x_y.is_none() { return None; }
+    let &(ref font, (x_scale, y_scale)) = f_x_y.unwrap();
+    let plain_glyph = font.glyph(c).unwrap();
+    if plain_glyph.id().0 == 0 { return None; }
+    let g = plain_glyph.standalone()
+      .scaled(rusttype::Scale{ x: x_scale, y: y_scale })
+      .positioned(rusttype::Point{x: 0.0, y: 0.0});
+    return Some(g);
+  }
+
+  /// Gets the next unique, unused font handle
   fn get_next_font_handle(&mut self) -> FontHandle {
     let fh = self.curr_font_handle;
     self.curr_font_handle.0 += 1;
@@ -62,7 +87,7 @@ impl GliumFontCache {
   pub fn get_tex(&self) -> &glium::texture::Texture2d { &self.cache_tex }
 }
 
-impl FontCache for GliumFontCache {
+impl<'a> FontCache for GliumFontCache<'a> {
   fn cache_glyphs<F: AsRef<Path>>(&mut self, filepath: F, scale: f32, 
                                   charset: &[char]) -> Result<(), CacheGlyphError> {
     use std::fs::File;
@@ -122,9 +147,10 @@ impl FontCache for GliumFontCache {
         glyphs_not_found.push(*c);
         continue;
       }
-      let g = font.glyph(*c).unwrap()
+      let g = plain_glyph.standalone()
         .scaled(rusttype::Scale::uniform(scale))
         .positioned(rusttype::Point{x: 0.0, y: 0.0});
+
       // Look up the rect in the cache
       let res = self.cache.rect_for(fh.0, &g);
       let mut cached = true;
@@ -134,7 +160,7 @@ impl FontCache for GliumFontCache {
       }
       // If the glyph isn't cached, then queue the glyph
       if !cached {
-        self.cache.queue_glyph(fh.0, g);
+        self.cache.queue_glyph(fh.0, g.clone());
       }
     }
     if glyphs_not_found.len() != 0 {
@@ -159,5 +185,9 @@ impl FontCache for GliumFontCache {
     }).map_err(|_| CacheGlyphError::CacheTooSmall));
 
     return Ok(());
+  }
+  fn rect_for(&self, font_handle: FontHandle, 
+              code_point: char) -> Result<(f32, f32, f32, f32), CacheReadError> {
+    return Ok((0.0, 0.0, 0.0, 0.0));
   }
 }
