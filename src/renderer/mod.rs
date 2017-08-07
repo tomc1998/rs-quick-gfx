@@ -125,7 +125,10 @@ impl<'a> Renderer<'a>{
                 &indices, 
                 &self.program, 
                 &uniforms, 
-                &Default::default()).unwrap();
+                &glium::DrawParameters {
+                  blend: glium::Blend::alpha_blending(),
+                  .. Default::default()
+                }).unwrap();
   }
 
   /// # Returns
