@@ -1,6 +1,8 @@
 use std;
+use rusttype::gpu_cache::CacheReadErr;
 use std::ops::Deref;
 use std::path::{PathBuf, Path};
+use std::collections::HashSet;
 use std::fmt::{Display, Formatter, self};
 
 pub mod glium_cache;
@@ -63,6 +65,53 @@ impl std::error::Error for CacheReadError {
   fn description(&self) -> &str { "The requested glyph was not in the cache" }
 }
 
+impl std::convert::From<CacheReadErr> for CacheReadError {
+  fn from(_: CacheReadErr) -> Self { CacheReadError }
+}
+
+/// Enum for the gen_charset convenience function.
+#[derive(Eq, PartialEq, Hash, Debug)]
+pub enum Charset {
+  /// [a-z]
+  Lowercase, 
+  /// [A-Z]
+  Uppercase, 
+  /// [0-9]
+  Numbers, 
+  /// ISO/IEC 8859-1 Punctuation
+  Punctuation,
+}
+
+/// Convenience function to generate commonly-used charsets in the form needed
+/// for FontCache::cache_glyphs().
+pub fn gen_charset(sets: &HashSet<Charset>) -> Vec<char> {
+  let mut chars = Vec::new();
+  for c in sets.iter() {
+    match *c {
+      Charset::Lowercase => {
+        chars.extend_from_slice(&['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i',
+                                'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r',
+                                's', 't', 'u', 'v', 'w', 'x', 'y', 'z']);
+      },
+      Charset::Uppercase => {
+        chars.extend_from_slice(&['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I',
+                                'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R',
+                                'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', ]);
+      },
+      Charset::Numbers => {
+        chars.extend_from_slice(&['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']);
+      },
+      Charset::Punctuation => {
+        chars.extend_from_slice(&[' ', '!', '"', '#', '$', '%', '&', '\'', '(',
+                                ')', '*', '+', ',', '-', '.', '/', ':', ';',
+                                '<', '=', '>', '?', '@', '[', '\\', ']', '^',
+                                '_', '`', '{', '|', '}', '~']);
+      }
+    }
+  }
+  return chars;
+}
+
 /// A trait for a GPU font cache. Glyphs are loaded into the font cache,
 /// which are stored on the GPU for fast access when rendering text.
 pub trait FontCache { 
@@ -78,7 +127,7 @@ pub trait FontCache {
   /// # Errors
   /// Will return a CacheGlyph error if this function failed to add the glyphs to the cache.
   fn cache_glyphs<F: AsRef<Path>>(&mut self, file: F, scale: f32, charset: &[char]) 
-    -> Result<(), CacheGlyphError>;
+    -> Result<FontHandle, CacheGlyphError>;
 
   /// A function to look up the texture coordinates of a given glyph.
   /// # Params
@@ -87,7 +136,7 @@ pub trait FontCache {
   /// # Errors
   /// Will return a CacheReadError if the glyph was not cached.
   fn rect_for(&self, font_handle: FontHandle, code_point: char) 
-    -> Result<(f32, f32, f32, f32), CacheReadError>;
+    -> Result<[f32; 4], CacheReadError>;
 }
 
 

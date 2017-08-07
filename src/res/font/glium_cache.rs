@@ -35,19 +35,20 @@ impl<'a> std::fmt::Debug for GliumFontCache<'a> {
 
 impl<'a> GliumFontCache<'a> {
   pub fn new(display: &glium::Display) -> GliumFontCache<'a> {
-    const CACHE_W : u32 = 256;
-    const CACHE_H : u32 = 256;
+    const CACHE_W : u32 = 4096;
+    const CACHE_H : u32 = 4096;
     GliumFontCache {
       font_handles: BTreeMap::new(),
       fonts: BTreeMap::new(),
       curr_font_handle: FontHandle(0),
-      // 2048 * 2048 cache with 0.1 scale and position fault tolerance.
-      cache: rusttype::gpu_cache::Cache::new(CACHE_W, CACHE_H, 0.1, 0.1),
+      // 2048 * 2048 cache with 0.1 scale tolerance and 1.0 position fault
+      // tolerance (we aren't using positioning).
+      cache: rusttype::gpu_cache::Cache::new(CACHE_W, CACHE_H, 0.1, 1.0),
       // Create a new glium 2d texture with the cache width and height as the texture size.
       cache_tex: glium::texture::Texture2d::with_format(
         display,
         glium::texture::RawImage2d {
-          data: Cow::Owned(vec![128u8; CACHE_W as usize * CACHE_H as usize]),
+          data: Cow::Owned(vec![0u8; CACHE_W as usize * CACHE_H as usize]),
           width: CACHE_W,
           height: CACHE_H,
           format: glium::texture::ClientFormat::U8
@@ -89,7 +90,7 @@ impl<'a> GliumFontCache<'a> {
 
 impl<'a> FontCache for GliumFontCache<'a> {
   fn cache_glyphs<F: AsRef<Path>>(&mut self, filepath: F, scale: f32, 
-                                  charset: &[char]) -> Result<(), CacheGlyphError> {
+                                  charset: &[char]) -> Result<FontHandle, CacheGlyphError> {
     use std::fs::File;
     use std::io::Read;
 
@@ -99,7 +100,7 @@ impl<'a> FontCache for GliumFontCache<'a> {
     try!(f.read_to_end(&mut data));
 
     // Create a font from the font file bytes.
-    let font = try!(FontCollection::from_bytes(&data[..]).into_font()
+    let font = try!(FontCollection::from_bytes(data).into_font()
                     .ok_or(std::io::Error::new(
                         std::io::ErrorKind::InvalidData, 
                         "Font file did not contain a valid font.")));
@@ -113,8 +114,8 @@ impl<'a> FontCache for GliumFontCache<'a> {
     }
     else { 
       fh = self.get_next_font_handle(); 
+      self.font_handles.insert(fs, fh);
     }
-    self.font_handles.insert(fs, fh);
 
     // Check if these characters exist in the cache - if not, queue them for
     // caching.  First, linear search n times through charset to make sure
@@ -184,10 +185,23 @@ impl<'a> FontCache for GliumFontCache<'a> {
       });
     }).map_err(|_| CacheGlyphError::CacheTooSmall));
 
-    return Ok(());
+    if !self.fonts.contains_key(&fh) {
+      self.fonts.insert(fh, (font, (scale, scale)));
+    }
+
+    return Ok(fh);
   }
   fn rect_for(&self, font_handle: FontHandle, 
-              code_point: char) -> Result<(f32, f32, f32, f32), CacheReadError> {
-    return Ok((0.0, 0.0, 0.0, 0.0));
+              code_point: char) -> Result<[f32; 4], CacheReadError> {
+    let g = self.get_glyph(font_handle, code_point); // Get the glyph
+    let g = try!(g.ok_or(CacheReadError));
+
+    // Try an get the rect. Returns an opt, but should never be none, something
+    // in rusttype about the glyph having a size of none.
+    let rect_opt = try!(self.cache.rect_for(font_handle.0, &g));
+
+    // UV rect and glyph screen pos rect
+    let (uv_rect, _) = try!(rect_opt.ok_or(CacheReadError)); 
+    Ok([uv_rect.min.x, uv_rect.min.y, uv_rect.max.x, uv_rect.max.y])
   }
 }

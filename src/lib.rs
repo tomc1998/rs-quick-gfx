@@ -12,11 +12,14 @@ pub use glium::glutin::Event;
 pub use glium::glutin::WindowEvent;
 pub use glium::glutin::DeviceEvent;
 pub use winit::{VirtualKeyCode, ElementState};
+pub use res::font::{gen_charset, Charset};
 
 use glium::Display;
 use glium::glutin::EventsLoop;
 use renderer::Renderer;
 use std::sync::Mutex;
+use std::path::Path;
+use res::font::{FontHandle, CacheGlyphError};
 
 
 /// The API of the library.
@@ -31,7 +34,6 @@ impl<'a> QGFX<'a> {
   pub fn new() -> QGFX<'a> {
     let (display, events_loop) = init_display();
     let renderer = Renderer::new(&display);
-    renderer.cache_glyphs("Arial Unicode.ttf", 24.0, &['a', 'b', 'c'][..]).unwrap();
     QGFX { 
       renderer: renderer,
       display: display,
@@ -43,6 +45,12 @@ impl<'a> QGFX<'a> {
   /// cloned.
   pub fn get_renderer_controller(&self) -> Box<RendererController<'a>> {
     return self.renderer.get_renderer_controller();
+  }
+
+  pub fn cache_glyphs<F: AsRef<Path>>(
+    &self, file: F, scale: f32, 
+    charset: &[char]) -> Result<FontHandle, CacheGlyphError> {
+    self.renderer.cache_glyphs(file, scale, charset)
   }
 
   /// Get the size of the display in pixels.

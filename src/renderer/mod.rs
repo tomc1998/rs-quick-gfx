@@ -11,7 +11,7 @@ use std::sync::mpsc;
 use std::sync::{Mutex, Arc};
 use glium::{self, VertexBuffer};
 use res::font::glium_cache::GliumFontCache;
-use res::font::CacheGlyphError;
+use res::font::{CacheGlyphError, FontHandle};
 
 /// The constant size of the renderer's VBO in vertices (i.e. can contain 1024 vertices)
 pub const VBO_SIZE : usize = 65563;
@@ -140,7 +140,7 @@ impl<'a> Renderer<'a>{
   /// This locks the mutex on the font cache, so any font rendering or caching
   /// on other threads will also be blocked for the duration.
   pub fn cache_glyphs<F: AsRef<Path>>(&self, file: F, scale: f32, 
-                                      charset: &[char]) -> Result<(), CacheGlyphError> {
+                                      charset: &[char]) -> Result<FontHandle, CacheGlyphError> {
     use res::font::FontCache;
     self.font_cache.lock().unwrap().cache_glyphs(file, scale, charset)
   }

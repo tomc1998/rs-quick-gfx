@@ -3,7 +3,7 @@ use std;
 use std::sync::mpsc;
 use std::sync::{Mutex, Arc};
 use res::font::glium_cache::GliumFontCache;
-use res::font::FontHandle;
+use res::font::{FontHandle, FontCache, CacheReadError};
 use vec::Vec2;
 
 #[derive(Copy, Clone, Hash, Debug)]
@@ -17,6 +17,10 @@ impl std::fmt::Display for RenderTextError {
 impl std::error::Error for RenderTextError {
   fn description(&self) -> &'static str { "Text rendering failed - not all glyphs were cached." }
 }
+impl std::convert::From<CacheReadError> for RenderTextError {
+  fn from(_: CacheReadError) -> Self { RenderTextError }
+}
+
 
 /// This struct wraps a Sender<Vec<Vertex>>, and has convenience methods to
 /// draw certain geometry.
@@ -133,18 +137,64 @@ impl<'a> RendererController<'a> {
   /// * `text` - The text to render
   /// * `pos` - The position to render the text at - this is the bottom left of the first character.
   /// * `font_handle` - This is the font to render the text with.
+  /// * `tint` - The tint to apply to the font.
   /// # Returns
   /// Error if not all the glyphs for this font were cached. To cache glyphs,
   /// use the cache_glyphs method on your QGFX instance.
-  pub fn text(&self, text: &str, pos: &[f32; 2], font_handle: FontHandle) -> Result<(), RenderTextError>{
+  pub fn text(&self, text: &str, pos: &[f32; 2], 
+              font_handle: FontHandle, tint: &[f32; 4]) -> Result<(), RenderTextError> {
     let font_cache = self.font_cache.lock().unwrap();
+    let mut vertices = Vec::with_capacity(text.len() * 6);
+    let mut cursor = pos.clone();
     for c in text.chars() {
-      // Get the UV rect for this char
-      let glyph = font_cache.get_glyph(font_handle, c);
-      if glyph.is_none() { return Err(RenderTextError); }
-      let glyph = glyph.unwrap();
-      
+      // Get the glyph metrics
+      let glyph = try!(font_cache.get_glyph(font_handle, c).ok_or(RenderTextError));
+      let h_metrics = glyph.unpositioned().h_metrics();
+      let (x, y, w, h) = {
+        let rect = glyph.unpositioned().exact_bounding_box().unwrap();
+        (rect.min.x, rect.min.y, rect.max.x - rect.min.x, rect.max.y - rect.min.y)
+      };
+
+      let rect = try!(font_cache.rect_for(font_handle, c));
+
+      cursor[0] += h_metrics.left_side_bearing;
+
+      // Generate vertices
+      vertices.push(Vertex {
+        pos: [x + cursor[0], y + cursor[1]],
+        col: tint.clone(),
+        tex_coords: [rect[0], rect[1]],
+      });
+      vertices.push(Vertex {
+        pos: [x + cursor[0] + w, y + cursor[1]],
+        col: tint.clone(),
+        tex_coords: [rect[2], rect[1]],
+      });
+      vertices.push(Vertex {
+        pos: [x + cursor[0] + w, y + cursor[1] + h],
+        col: tint.clone(),
+        tex_coords: [rect[2], rect[3]],
+      });
+      vertices.push(Vertex {
+        pos: [x + cursor[0], y + cursor[1]],
+        col: tint.clone(),
+        tex_coords: [rect[0], rect[1]],
+      });
+      vertices.push(Vertex {
+        pos: [x + cursor[0], y + cursor[1] + h],
+        col: tint.clone(),
+        tex_coords: [rect[0], rect[3]],
+      });
+      vertices.push(Vertex {
+        pos: [x + cursor[0] + w, y + cursor[1] + h],
+        col: tint.clone(),
+        tex_coords: [rect[2], rect[3]],
+      });
+
+      cursor[0] += h_metrics.advance_width;
     }
+
+    self.sender.send(vertices).unwrap();
     return Ok(());
   }
 }

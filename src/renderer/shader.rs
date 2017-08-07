@@ -5,6 +5,8 @@ pub fn get_program(display: &glium::Display) -> glium::Program {
   let v_shader = r#"
     #version 130
 
+    precision highp float;
+
     uniform mat4 proj_mat;
 
     in vec2 pos;
@@ -32,7 +34,7 @@ pub fn get_program(display: &glium::Display) -> glium::Program {
     out vec4 color;
 
     void main() {
-      color = texture(tex, v_tex_coords);
+      color = texture(tex, v_tex_coords).xxxx;
     }
   "#;
   glium::Program::from_source(display, v_shader, f_shader, None).unwrap()
