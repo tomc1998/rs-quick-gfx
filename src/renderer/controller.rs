@@ -5,6 +5,7 @@ use std::sync::{Mutex, Arc};
 use res::font::glium_cache::GliumFontCache;
 use res::font::{FontHandle, FontCache, CacheReadError};
 use vec::Vec2;
+use rusttype::Scale;
 
 #[derive(Copy, Clone, Hash, Debug)]
 pub struct RenderTextError;
@@ -144,8 +145,10 @@ impl<'a> RendererController<'a> {
   pub fn text(&self, text: &str, pos: &[f32; 2], 
               font_handle: FontHandle, tint: &[f32; 4]) -> Result<(), RenderTextError> {
     let font_cache = self.font_cache.lock().unwrap();
+    let &(ref font, (scale, _)) = font_cache.get_font_ref(font_handle).unwrap();
     let mut vertices = Vec::with_capacity(text.len() * 6);
     let mut cursor = pos.clone();
+    let mut last_glyph_id = None; // For kerning.
     for c in text.chars() {
       // Get the glyph metrics
       let glyph = try!(font_cache.get_glyph(font_handle, c).ok_or(RenderTextError));
@@ -168,6 +171,11 @@ impl<'a> RendererController<'a> {
         continue;
       }
       let rect = rect.unwrap();
+
+      if last_glyph_id.is_some() {
+        cursor[0] += font.pair_kerning(Scale::uniform(scale), last_glyph_id.unwrap(), glyph.id());
+      }
+      last_glyph_id = Some(glyph.id());
 
       cursor[0] += h_metrics.left_side_bearing;
 

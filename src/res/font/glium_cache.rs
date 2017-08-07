@@ -58,6 +58,10 @@ impl<'a> GliumFontCache<'a> {
     }
   }
 
+  /// Get a reference to the font (and scale x, y) attached to the given font
+  /// handle.
+  pub fn get_font_ref(&self, fh: FontHandle) -> Option<&(Font, (f32, f32))> { self.fonts.get(&fh) }
+
   /// A function to get a glyph in the cache, given a font handle and a character.
   /// # Returns
   /// * Some(glyph) if the glyph was found.
