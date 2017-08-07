@@ -154,10 +154,11 @@ impl<'a> RendererController<'a> {
       let glyph = try!(font_cache.get_glyph(font_handle, c).ok_or(RenderTextError));
       let h_metrics = glyph.unpositioned().h_metrics();
       let (x, y, w, h) = {
-        let rect = glyph.unpositioned().exact_bounding_box();
+        let rect = glyph.pixel_bounding_box();
         if rect.is_some() {
           let rect = rect.unwrap();
-          (rect.min.x, rect.min.y, rect.max.x - rect.min.x, rect.max.y - rect.min.y)
+          (rect.min.x as f32, rect.min.y as f32, 
+           (rect.max.x - rect.min.x) as f32, (rect.max.y - rect.min.y) as f32)
         }
         else { (0.0, 0.0, 0.0, 0.0) }
       };
