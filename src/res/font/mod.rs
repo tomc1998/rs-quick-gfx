@@ -133,10 +133,14 @@ pub trait FontCache {
   /// # Params
   /// * `font_handle` - The handle of the font this glyph was cached into with.
   /// * `code_point` - The code_point of the glyph to look up
+  /// # Returns
+  /// A result. When Ok, contains an option, containing the tex coords of the
+  /// glyph requested. This can be null if the glyph isn't a glyph which needs
+  /// to be rendered - i.e. the 'space' character.
   /// # Errors
   /// Will return a CacheReadError if the glyph was not cached.
   fn rect_for(&self, font_handle: FontHandle, code_point: char) 
-    -> Result<[f32; 4], CacheReadError>;
+    -> Result<Option<[f32; 4]>, CacheReadError>;
 }
 
 

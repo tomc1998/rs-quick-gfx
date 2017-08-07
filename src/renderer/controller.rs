@@ -151,11 +151,23 @@ impl<'a> RendererController<'a> {
       let glyph = try!(font_cache.get_glyph(font_handle, c).ok_or(RenderTextError));
       let h_metrics = glyph.unpositioned().h_metrics();
       let (x, y, w, h) = {
-        let rect = glyph.unpositioned().exact_bounding_box().unwrap();
-        (rect.min.x, rect.min.y, rect.max.x - rect.min.x, rect.max.y - rect.min.y)
+        let rect = glyph.unpositioned().exact_bounding_box();
+        if rect.is_some() {
+          let rect = rect.unwrap();
+          (rect.min.x, rect.min.y, rect.max.x - rect.min.x, rect.max.y - rect.min.y)
+        }
+        else { (0.0, 0.0, 0.0, 0.0) }
       };
 
       let rect = try!(font_cache.rect_for(font_handle, c));
+      // If none, just advance cursor and continue. Nothing to draw, but glyph
+      // has dimensions
+      if rect.is_none() { 
+        cursor[0] += h_metrics.left_side_bearing;
+        cursor[0] += h_metrics.advance_width;
+        continue;
+      }
+      let rect = rect.unwrap();
 
       cursor[0] += h_metrics.left_side_bearing;
 

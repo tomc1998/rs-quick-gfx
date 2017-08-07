@@ -192,16 +192,16 @@ impl<'a> FontCache for GliumFontCache<'a> {
     return Ok(fh);
   }
   fn rect_for(&self, font_handle: FontHandle, 
-              code_point: char) -> Result<[f32; 4], CacheReadError> {
+              code_point: char) -> Result<Option<[f32; 4]>, CacheReadError> {
     let g = self.get_glyph(font_handle, code_point); // Get the glyph
     let g = try!(g.ok_or(CacheReadError));
 
-    // Try an get the rect. Returns an opt, but should never be none, something
-    // in rusttype about the glyph having a size of none.
+    // Try and get the rect.     
     let rect_opt = try!(self.cache.rect_for(font_handle.0, &g));
+    if rect_opt.is_none() { return Ok(None); }
 
     // UV rect and glyph screen pos rect
-    let (uv_rect, _) = try!(rect_opt.ok_or(CacheReadError)); 
-    Ok([uv_rect.min.x, uv_rect.min.y, uv_rect.max.x, uv_rect.max.y])
+    let (uv_rect, _) = rect_opt.unwrap();
+    Ok(Some([uv_rect.min.x, uv_rect.min.y, uv_rect.max.x, uv_rect.max.y]))
   }
 }

@@ -14,7 +14,7 @@ fn main() {
   
   // Get a controller, and draw some text.
   let controller = g.get_renderer_controller();
-  controller.text("Thequickbrownfoxjumpsoverthelazydog!",
+  controller.text("The quick brown fox jumps over the lazy dog!",
                   &[100.0, 100.0], fh, &[1.0, 1.0, 1.0, 1.0]).unwrap();
 
   // Once we've send the data, we need to have the renderer receive it.
