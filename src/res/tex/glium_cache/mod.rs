@@ -1,7 +1,7 @@
 //! A module containing a glium implementation of a tex cache.
 
 use glium;
-use glium::texture::Texture2d;
+use glium::texture::{Texture2d, RawImage2d};
 use res::tex::*;
 use image;
 
@@ -49,8 +49,11 @@ impl GliumTexCache {
 
 impl TexCache for GliumTexCache {
   /// This must be called on the main thread, with the GL context as it may create textures.
-#[allow(unused_variables)]
-  fn cache_tex<F: AsRef<Path>>(&mut self, display: &glium::Display, filepaths: &[F]) -> Vec<Result<TexHandle, CacheTexError>> {
+  #[allow(unused_variables)]
+  fn cache_tex<F: AsRef<Path>>(
+    &mut self, display: &glium::Display, 
+    filepaths: &[F]) -> Vec<Result<TexHandle, CacheTexError>> {
+
     use std::fs::File;
     use std::io::Read;
     let mut result = Vec::with_capacity(filepaths.len());
@@ -91,16 +94,50 @@ impl TexCache for GliumTexCache {
       let tex_handle = self.get_next_tex_handle();
       // Now try and fit it into the cache using the bin packing algorithm.
       // Loop over all the current textures and try to pack_rect.
-      let mut tex_ix = None;
+      let mut packed = false;
       for (ii, t) in self.bin_pack_trees.iter_mut().enumerate() {
         let res = t.pack_rect(w as f32 / self.cache_texture_size.0 as f32, 
                               h as f32 / self.cache_texture_size.1 as f32, 
                               tex_handle);
-        if res.is_ok() { tex_ix = Some(ii); break; }
+        if res.is_ok() { packed = true; break; }
       }
       // If we haven't managed to pack the texture into existing cache
       // textures, then we need to create a new texture2d.
-      if tex_ix.is_none() {
+      if !packed {
+        if self.cache_textures.len() >= self.max_cache_textures {
+          result.push(Err(CacheTexError::NoSpace));
+          continue;
+        }
+
+        use std::borrow::Cow;
+        let data_len = self.cache_texture_size.0 as usize 
+          * self.cache_texture_size.1 as usize;
+        let mut data = Vec::with_capacity(data_len);
+        data.resize(data_len, 0.0);
+        let tex = Texture2d::new(display, RawImage2d {
+          data: Cow::Owned(data),
+          width: self.cache_texture_size.0,
+          height: self.cache_texture_size.1,
+          format: glium::texture::ClientFormat::F32F32F32F32,
+        });
+        if tex.is_err() {
+          match tex.err().unwrap() {
+            glium::texture::TextureCreationError::DimensionsNotSupported => {
+              result.push(Err(CacheTexError::DimensionsNotSupported));
+              continue;
+            }
+            e => panic!("Unexpected error when creating cache texture: {}", e),
+          }
+        }
+        self.cache_textures.push(tex.unwrap());
+        self.bin_pack_trees.push(BinaryTreeNode::new([0.0, 0.0, 1.0, 1.0]));
+
+        // Pack the rect into this new texture.  No need to error handle this
+        // one, too small error handled earlier in this function
+        self.bin_pack_trees.last_mut().unwrap().pack_rect( 
+          w as f32 / self.cache_texture_size.0 as f32, 
+          h as f32 / self.cache_texture_size.1 as f32, 
+          tex_handle).unwrap();
       }
     }
 

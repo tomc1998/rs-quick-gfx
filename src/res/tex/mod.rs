@@ -28,6 +28,9 @@ pub enum CacheTexError {
 
   /// An error occurred creating an image from the bytes read.
   ImageError(image::ImageError),
+
+  /// The cache tried to create a texture which was too large to be supported.
+  DimensionsNotSupported,
 }
 
 /// A trait for a GPU texture cache.
