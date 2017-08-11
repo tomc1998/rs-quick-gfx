@@ -72,7 +72,7 @@ impl BinaryTreeNode {
   /// # Notes
   /// If this node is not a leaf node, then this function will be recursively
   /// called on the child nodes of this node.
-  fn pack_rect(&mut self, w: f32, h: f32, tex: TexHandle) -> Result<(), PackRectError> {
+  pub fn pack_rect(&mut self, w: f32, h: f32, tex: TexHandle) -> Result<(), PackRectError> {
     if !self.is_leaf() {
       // Recurse.
       debug_assert!(self.l_child.is_some() && self.r_child.is_some(), 
@@ -85,7 +85,6 @@ impl BinaryTreeNode {
         }
       }
       else { return res; }
-      unreachable!();
     }
 
     // Check the given w/h is small enough to fit

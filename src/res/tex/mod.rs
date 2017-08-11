@@ -1,5 +1,6 @@
 pub mod glium_cache;
 
+use glium;
 use std;
 use image;
 use std::path::Path;
@@ -35,7 +36,9 @@ pub trait TexCache {
   /// 
   /// Texture handles are returned in a slice with the indexes corresponding to
   /// the indexes in the slice of texture files given.
-  fn cache_tex<F: AsRef<Path>>(&mut self, filepaths: &[F]) -> Vec<Result<TexHandle, CacheTexError>>;
+  fn cache_tex<F: AsRef<Path>>(
+    &mut self, display: &glium::Display, 
+    filepaths: &[F]) -> Vec<Result<TexHandle, CacheTexError>>;
 
   /// A function to free a given list of texture from the cache. If a
   /// texture is not cached, it is ignored.

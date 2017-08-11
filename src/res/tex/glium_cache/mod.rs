@@ -1,5 +1,6 @@
 //! A module containing a glium implementation of a tex cache.
 
+use glium;
 use glium::texture::Texture2d;
 use res::tex::*;
 use image;
@@ -91,8 +92,10 @@ impl TexCache for GliumTexCache {
       // Now try and fit it into the cache using the bin packing algorithm.
       // Loop over all the current textures and try to pack_rect.
       let mut tex_ix = None;
-      for (t, ii) in self.bin_pack_trees.enumerate() {
-        let res = t.pack_rect(w, h, tex_handle);
+      for (ii, t) in self.bin_pack_trees.iter_mut().enumerate() {
+        let res = t.pack_rect(w as f32 / self.cache_texture_size.0 as f32, 
+                              h as f32 / self.cache_texture_size.1 as f32, 
+                              tex_handle);
         if res.is_ok() { tex_ix = Some(ii); break; }
       }
       // If we haven't managed to pack the texture into existing cache
