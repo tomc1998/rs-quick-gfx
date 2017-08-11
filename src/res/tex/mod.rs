@@ -1,6 +1,7 @@
 pub mod glium_cache;
 
 use std;
+use image;
 use std::path::Path;
 use glium::texture::Texture2d;
 
@@ -23,6 +24,9 @@ pub enum CacheTexError {
 
   /// An IO error occurred when reading the texture file.
   IoError(std::io::Error),
+
+  /// An error occurred creating an image from the bytes read.
+  ImageError(image::ImageError),
 }
 
 /// A trait for a GPU texture cache.

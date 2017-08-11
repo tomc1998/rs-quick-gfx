@@ -2,6 +2,7 @@
 extern crate glium;
 extern crate winit;
 extern crate rusttype;
+extern crate image;
 
 mod renderer;
 mod vec;
