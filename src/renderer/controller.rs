@@ -1,9 +1,11 @@
-use renderer::Vertex;
+use renderer::{Vertex, TexType};
 use std;
 use std::sync::mpsc;
 use std::sync::{Mutex, Arc};
 use res::font::glium_cache::GliumFontCache;
 use res::font::{FontHandle, FontCache, CacheReadError};
+use res::tex::{TexHandle};
+use res::tex::glium_cache::GliumTexCache;
 use vec::Vec2;
 use rusttype::Scale;
 
@@ -22,12 +24,28 @@ impl std::convert::From<CacheReadError> for RenderTextError {
   fn from(_: CacheReadError) -> Self { RenderTextError }
 }
 
+#[derive(Copy, Clone, Hash, Debug)]
+pub struct RenderTextureError;
+impl std::fmt::Display for RenderTextureError {
+  fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+    use std::error::Error;
+    write!(f, "{}", self.description())
+  }
+}
+impl std::error::Error for RenderTextureError {
+  fn description(&self) -> &'static str { "Texture rendering failed - texture wasn't cached." }
+}
+impl std::convert::From<CacheReadError> for RenderTextureError {
+  fn from(_: CacheReadError) -> Self { RenderTextureError }
+}
+
 
 /// This struct wraps a Sender<Vec<Vertex>>, and has convenience methods to
 /// draw certain geometry.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct RendererController<'a> {
   font_cache: Arc<Mutex<GliumFontCache<'a>>>,
+  tex_cache: Arc<Mutex<GliumTexCache>>,
   sender: mpsc::Sender<Vec<Vertex>>,
 }
 
@@ -36,8 +54,12 @@ impl<'a> RendererController<'a> {
   /// to get a renderer controller, look at the
   /// renderer::Renderer::get_renderer_controller() function.
   pub fn new(sender: mpsc::Sender<Vec<Vertex>>, 
-             font_cache: Arc<Mutex<GliumFontCache<'a>>>) -> Box<RendererController<'a>> {
-    Box::new(RendererController { sender: sender, font_cache: font_cache })
+             font_cache: Arc<Mutex<GliumFontCache<'a>>>,
+             tex_cache: Arc<Mutex<GliumTexCache>>) -> Box<RendererController<'a>> {
+    Box::new(RendererController { 
+      sender: sender, 
+      font_cache: font_cache, 
+      tex_cache: tex_cache})
   }
 
   /// Draws a line given a start and an endpoint.
@@ -61,14 +83,38 @@ impl<'a> RendererController<'a> {
 
     // Generate the vertex data
     // tri 1
-    data.push(Vertex{ pos: [perp_l_1[0], perp_l_1[1]], col: col.clone(), tex_coords: [0.0, 0.0]});
-    data.push(Vertex{ pos: [perp_r_1[0], perp_r_1[1]], col: col.clone(), tex_coords: [0.0, 0.0]});
-    data.push(Vertex{ pos: [perp_l_2[0], perp_l_2[1]], col: col.clone(), tex_coords: [0.0, 0.0]});
+    data.push(Vertex{ 
+      pos: [perp_l_1[0], perp_l_1[1]], 
+      col: col.clone(), 
+      tex_coords: [0.0, 0.0], 
+      tex_type: TexType::Texture, tex_ix: 0});
+    data.push(Vertex{ 
+      pos: [perp_r_1[0], perp_r_1[1]], 
+      col: col.clone(), 
+      tex_coords: [0.0, 0.0],
+      tex_type: TexType::Texture, tex_ix: 0});
+    data.push(Vertex{ 
+      pos: [perp_l_2[0], perp_l_2[1]], 
+      col: col.clone(), 
+      tex_coords: [0.0, 0.0],
+      tex_type: TexType::Texture, tex_ix: 0});
 
     // tri 2
-    data.push(Vertex{ pos: [perp_l_2[0], perp_l_2[1]], col: col.clone(), tex_coords: [0.0, 0.0]});
-    data.push(Vertex{ pos: [perp_r_2[0], perp_r_2[1]], col: col.clone(), tex_coords: [0.0, 0.0]});
-    data.push(Vertex{ pos: [perp_r_1[0], perp_r_1[1]], col: col.clone(), tex_coords: [0.0, 0.0]});
+    data.push(Vertex{ 
+      pos: [perp_l_2[0], perp_l_2[1]], 
+      col: col.clone(), 
+      tex_type: TexType::Texture, tex_ix: 0,
+      tex_coords: [0.0, 0.0]});
+    data.push(Vertex{ 
+      pos: [perp_r_2[0], perp_r_2[1]], 
+      col: col.clone(), 
+      tex_type: TexType::Texture, tex_ix: 0,
+      tex_coords: [0.0, 0.0]});
+    data.push(Vertex{ 
+      pos: [perp_r_1[0], perp_r_1[1]], 
+      col: col.clone(), 
+      tex_type: TexType::Texture, tex_ix: 0,
+      tex_coords: [0.0, 0.0]});
 
     // Send the vertex data through the sender
     self.sender.send(data).unwrap();
@@ -83,14 +129,38 @@ impl<'a> RendererController<'a> {
 
     // Generate vertex data
     // Tri 1
-    data.push( Vertex { pos: [aabb[0], aabb[1]], col: col.clone(), tex_coords: [0.0, 0.0] });
-    data.push( Vertex { pos: [aabb[0] + aabb[2], aabb[1]], col: col.clone(), tex_coords: [1.0, 0.0] });
-    data.push( Vertex { pos: [aabb[0] + aabb[2], aabb[1] + aabb[3]], col: col.clone(), tex_coords: [1.0, 1.0] });
+    data.push( Vertex { 
+      pos: [aabb[0], aabb[1]], 
+      col: col.clone(), 
+      tex_type: TexType::Texture, tex_ix: 0,
+      tex_coords: [0.0, 0.0] });
+    data.push( Vertex { 
+      pos: [aabb[0] + aabb[2], aabb[1]], 
+      col: col.clone(), 
+      tex_type: TexType::Texture, tex_ix: 0,
+      tex_coords: [1.0, 0.0] });
+    data.push( Vertex { 
+      pos: [aabb[0] + aabb[2], aabb[1] + aabb[3]], 
+      col: col.clone(), 
+      tex_type: TexType::Texture, tex_ix: 0,
+      tex_coords: [1.0, 1.0] });
 
     // Tri 2
-    data.push( Vertex { pos: [aabb[0], aabb[1]], col: col.clone(), tex_coords: [0.0, 0.0] });
-    data.push( Vertex { pos: [aabb[0], aabb[1] + aabb[3]], col: col.clone(), tex_coords: [0.0, 1.0] });
-    data.push( Vertex { pos: [aabb[0] + aabb[2], aabb[1] + aabb[3]], col: col.clone(), tex_coords: [1.0, 1.0] });
+    data.push( Vertex { 
+      pos: [aabb[0], aabb[1]], 
+      col: col.clone(), 
+      tex_type: TexType::Texture, tex_ix: 0,
+      tex_coords: [0.0, 0.0] });
+    data.push( Vertex { 
+      pos: [aabb[0], aabb[1] + aabb[3]], 
+      col: col.clone(), 
+      tex_type: TexType::Texture, tex_ix: 0,
+      tex_coords: [0.0, 1.0] });
+    data.push( Vertex { 
+      pos: [aabb[0] + aabb[2], aabb[1] + aabb[3]], 
+      col: col.clone(), 
+      tex_type: TexType::Texture, tex_ix: 0,
+      tex_coords: [1.0, 1.0] });
 
     // Send the data
     self.sender.send(data).unwrap();
@@ -109,19 +179,25 @@ impl<'a> RendererController<'a> {
     let angle_increment = 2.0*(PI as f32)*(1.0 / segments as f32);
     for _ in 0..segments {
       // Vertex at the centre of the circle
-      data.push(Vertex {pos: pos.clone(), col: col.clone(), tex_coords: [0.0, 0.0]});
+      data.push(Vertex {
+        pos: pos.clone(), 
+        col: col.clone(), 
+        tex_type: TexType::Texture, tex_ix: 0,
+        tex_coords: [0.0, 0.0]});
 
       // Other two vertices of the triangle
       data.push(Vertex {
         pos: [
           pos[0] + rad*(curr_angle.cos()), 
           pos[1] + rad*(curr_angle.sin())], 
+        tex_type: TexType::Texture, tex_ix: 0,
         col: col.clone(), tex_coords: [0.0, 0.0]
       });
       data.push(Vertex {
         pos: [
           pos[0] + rad*((curr_angle+angle_increment).cos()), 
           pos[1] + rad*((curr_angle+angle_increment).sin())], 
+        tex_type: TexType::Texture, tex_ix: 0,
         col: col.clone(), tex_coords: [0.0, 0.0]
       });
 
@@ -131,6 +207,67 @@ impl<'a> RendererController<'a> {
 
     // Send the data
     self.sender.send(data).unwrap();
+  }
+
+  /// Render a texture.
+  /// # Params 
+  /// * `tex` - The handle of the texture to render.
+  /// * `aabb` - The AABB bounding box of the final texture - X, Y, W, H.
+  /// * `tint` - The colour to tint the texture.
+  pub fn tex(&self, tex: TexHandle, aabb: &[f32; 4], 
+             tint: &[f32; 4]) -> Result<(), RenderTextureError> {
+    use res::tex::TexCache;
+    // Get the index of this texture.
+    let ix_rect_opt = { self.tex_cache.lock().unwrap().rect_for(tex) };
+    if ix_rect_opt.is_none() { return Err(RenderTextureError); }
+    let (tex_ix, mut rect) = ix_rect_opt.unwrap();
+    // Transform from x,y,w,h to x0,y0,x1,y1
+    rect[2] = rect[0] + rect[2];
+    rect[3] = rect[1] + rect[3];
+
+    let (x, y, w, h) = (aabb[0], aabb[1], aabb[2], aabb[3]);
+
+    let mut vertices = Vec::with_capacity(6);
+    // Generate vertex data.
+    vertices.push(Vertex {
+      pos: [x, y],
+      col: tint.clone(),
+      tex_type: TexType::Texture, tex_ix: tex_ix,
+      tex_coords: [rect[0], rect[1]],
+    });
+    vertices.push(Vertex {
+      pos: [x + w, y],
+      col: tint.clone(),
+      tex_type: TexType::Texture, tex_ix: tex_ix,
+      tex_coords: [rect[2], rect[1]],
+    });
+    vertices.push(Vertex {
+      pos: [x + w, y + h],
+      col: tint.clone(),
+      tex_type: TexType::Texture, tex_ix: tex_ix,
+      tex_coords: [rect[2], rect[3]],
+    });
+    vertices.push(Vertex {
+      pos: [x, y],
+      col: tint.clone(),
+      tex_type: TexType::Texture, tex_ix: tex_ix,
+      tex_coords: [rect[0], rect[1]],
+    });
+    vertices.push(Vertex {
+      pos: [x, y + h],
+      col: tint.clone(),
+      tex_type: TexType::Texture, tex_ix: tex_ix,
+      tex_coords: [rect[0], rect[3]],
+    });
+    vertices.push(Vertex {
+      pos: [x + w, y + h],
+      col: tint.clone(),
+      tex_type: TexType::Texture, tex_ix: tex_ix,
+      tex_coords: [rect[2], rect[3]],
+    });
+
+    self.sender.send(vertices).unwrap();
+    return Ok(());
   }
 
   /// Render some text. 
@@ -184,31 +321,37 @@ impl<'a> RendererController<'a> {
       vertices.push(Vertex {
         pos: [x + cursor[0], y + cursor[1]],
         col: tint.clone(),
+        tex_type: TexType::Font, tex_ix: 0,
         tex_coords: [rect[0], rect[1]],
       });
       vertices.push(Vertex {
         pos: [x + cursor[0] + w, y + cursor[1]],
         col: tint.clone(),
+        tex_type: TexType::Font, tex_ix: 0,
         tex_coords: [rect[2], rect[1]],
       });
       vertices.push(Vertex {
         pos: [x + cursor[0] + w, y + cursor[1] + h],
         col: tint.clone(),
+        tex_type: TexType::Font, tex_ix: 0,
         tex_coords: [rect[2], rect[3]],
       });
       vertices.push(Vertex {
         pos: [x + cursor[0], y + cursor[1]],
         col: tint.clone(),
+        tex_type: TexType::Font, tex_ix: 0,
         tex_coords: [rect[0], rect[1]],
       });
       vertices.push(Vertex {
         pos: [x + cursor[0], y + cursor[1] + h],
         col: tint.clone(),
+        tex_type: TexType::Font, tex_ix: 0,
         tex_coords: [rect[0], rect[3]],
       });
       vertices.push(Vertex {
         pos: [x + cursor[0] + w, y + cursor[1] + h],
         col: tint.clone(),
+        tex_type: TexType::Font, tex_ix: 0,
         tex_coords: [rect[2], rect[3]],
       });
 

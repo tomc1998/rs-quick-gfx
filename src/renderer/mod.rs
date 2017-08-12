@@ -18,11 +18,28 @@ use res::tex::glium_cache::GliumTexCache;
 /// The constant size of the renderer's VBO in vertices (i.e. can contain 1024 vertices)
 pub const VBO_SIZE : usize = 65563;
 
-#[derive(Copy, Clone, Debug)]
+/// An enum for texture types. For example, when rendering a font, vertices
+/// should be send with a 'Font' texture type, to indicate they will be drawn
+/// with the font texture as the loaded uniform.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub enum TexType {
+  Texture, Font
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Vertex {
+  /// The position of the vertex. Sent to the shader.
   pub pos: [f32; 2],
+  /// The UV coordinates of the vertex. Sent to the shader.
   pub tex_coords: [f32; 2],
+  /// The colour of this vertex. Sent to the shader.
   pub col: [f32; 4],
+  /// The type of texture this vertex will use. See enum TexType. NOT sent to the shader.
+  pub tex_type: TexType,
+  /// The index of the texture in the cache to use. Texture caches can have
+  /// multiple textures stored in video ram, this number indicates which to
+  /// use. NOT sent to the shader.
+  pub tex_ix: usize,
 }
 implement_vertex!(Vertex, pos, tex_coords, col);
 
@@ -103,7 +120,10 @@ impl<'a> Renderer<'a>{
     }
 
     while self.v_data.len() < VBO_SIZE {
-      self.v_data.push(Vertex { pos: [0.0; 2], col: [0.0; 4], tex_coords: [0.0, 0.0] } );
+      self.v_data.push(Vertex { 
+        pos: [0.0; 2], col: [0.0; 4], 
+        tex_coords: [0.0, 0.0], 
+        tex_ix: 0, tex_type: TexType::Texture} );
     }
   }
 
@@ -139,7 +159,9 @@ impl<'a> Renderer<'a>{
   /// A Sender<Vertex> for sending vertex data to the renderer. When
   /// render() is called, this data will be rendered then cleared.
   pub fn get_renderer_controller(&self) -> Box<RendererController<'a>> {
-    RendererController::new(self.v_channel_pair.0.clone(), self.font_cache.clone())
+    RendererController::new(self.v_channel_pair.0.clone(), 
+                            self.font_cache.clone(), 
+                            self.tex_cache.clone())
   }
 
   /// A function to add the given chars to the cache. See res::font::FontCache

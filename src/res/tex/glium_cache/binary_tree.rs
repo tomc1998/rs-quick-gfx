@@ -117,4 +117,23 @@ impl BinaryTreeNode {
 
     return Ok(self.space.clone());
   }
+
+  /// Get the rectangle for a given texture handle.
+  /// # Returns
+  /// None if the texture was not found in this tree.
+  pub fn rect_for(&self, tex_handle: TexHandle) -> Option<[f32; 4]> {
+    if self.tex_handle.is_none() { return None; }
+    if *self.tex_handle.as_ref().unwrap() == tex_handle {
+      return Some(self.space);
+    }
+    let mut res = None;
+    if self.l_child.is_some() {
+      res = self.l_child.as_ref().unwrap().rect_for(tex_handle);
+    }
+    if res.is_some() { return res; }
+    if self.r_child.is_some() {
+      return self.r_child.as_ref().unwrap().rect_for(tex_handle);
+    }
+    return None;
+  }
 }

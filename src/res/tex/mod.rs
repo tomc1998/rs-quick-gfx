@@ -58,7 +58,7 @@ pub trait TexCache {
   ///
   /// If the texture is not cached, this function returns None in its place in
   /// the returned array.
-  fn rect_for(&self, tex: &[TexHandle]) -> Vec<Option<(usize, [f32; 4])>>;
+  fn rect_for(&self, tex: TexHandle) -> Option<(usize, [f32; 4])>;
 
   /// Gets a reference to the cache texture with the given index. If the
   /// texture is not found, returns None.

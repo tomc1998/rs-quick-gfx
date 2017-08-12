@@ -162,14 +162,16 @@ impl TexCache for GliumTexCache {
     unimplemented!();
   }
 
-#[allow(unused_variables)]
   fn is_tex_cached(&self, tex: TexHandle) -> bool {
-    unimplemented!();
+    self.rect_for(tex).is_some()
   }
 
-#[allow(unused_variables)]
-  fn rect_for(&self, tex: &[TexHandle]) -> Vec<Option<(usize, [f32; 4])>> {
-    unimplemented!();
+  fn rect_for(&self, tex: TexHandle) -> Option<(usize, [f32; 4])> {
+    for (ii, t) in self.bin_pack_trees.iter().enumerate() {
+      let res = t.rect_for(tex);
+      if res.is_some() { return Some((ii, res.unwrap())); };
+    }
+    return None;
   }
 
   fn get_tex_with_ix(&self, ix: usize) -> Option<&Texture2d> {
