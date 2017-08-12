@@ -12,6 +12,8 @@ use std::sync::{Mutex, Arc};
 use glium::{self, VertexBuffer};
 use res::font::glium_cache::GliumFontCache;
 use res::font::{CacheGlyphError, FontHandle};
+use res::tex::{CacheTexError, TexHandle};
+use res::tex::glium_cache::GliumTexCache;
 
 /// The constant size of the renderer's VBO in vertices (i.e. can contain 1024 vertices)
 pub const VBO_SIZE : usize = 65563;
@@ -45,6 +47,7 @@ pub struct Renderer<'a> {
   proj_mat: [[f32; 4]; 4],
 
   font_cache: Arc<Mutex<GliumFontCache<'a>>>,
+  tex_cache: Arc<Mutex<GliumTexCache>>,
 }
 
 impl<'a> Renderer<'a>{
@@ -62,6 +65,7 @@ impl<'a> Renderer<'a>{
       v_data: Vec::new(),
       v_channel_pair: mpsc::channel(),
       font_cache: Arc::new(Mutex::new(font_cache)),
+      tex_cache: Arc::new(Mutex::new(GliumTexCache::new())),
       proj_mat: [[2.0/w as f32, 0.0,           0.0, -0.0],
                  [0.0,         -2.0/h as f32,  0.0,  0.0],
                  [0.0,          0.0,          -1.0,  0.0],
@@ -146,6 +150,14 @@ impl<'a> Renderer<'a>{
                                       charset: &[char]) -> Result<FontHandle, CacheGlyphError> {
     use res::font::FontCache;
     self.font_cache.lock().unwrap().cache_glyphs(file, scale, charset)
+  }
+
+  /// Cache textures from filepaths, returning a list of texture handles.
+  pub fn cache_tex<F: AsRef<Path>>(
+    &self, display: &glium::Display, 
+    filepaths: &[F]) -> Vec<Result<TexHandle, CacheTexError>> {
+    use res::tex::TexCache;
+    self.tex_cache.lock().unwrap().cache_tex(display, filepaths)
   }
 }
 

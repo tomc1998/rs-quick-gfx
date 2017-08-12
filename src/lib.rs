@@ -20,7 +20,8 @@ use glium::glutin::EventsLoop;
 use renderer::Renderer;
 use std::sync::Mutex;
 use std::path::Path;
-use res::font::{FontHandle, CacheGlyphError};
+pub use res::font::{FontHandle, CacheGlyphError};
+pub use res::tex::{TexHandle, CacheTexError};
 
 
 /// The API of the library.
@@ -48,10 +49,30 @@ impl<'a> QGFX<'a> {
     return self.renderer.get_renderer_controller();
   }
 
-  pub fn cache_glyphs<F: AsRef<Path>>(
+  /// Cache some glyphs from a font.
+  pub fn cache_glyphs<F: AsRef<Path>> (
     &self, file: F, scale: f32, 
     charset: &[char]) -> Result<FontHandle, CacheGlyphError> {
     self.renderer.cache_glyphs(file, scale, charset)
+  }
+
+  /// A function to cache some textures and return texture handles.
+  /// 
+  ///
+  /// # Params
+  /// * `filepaths` - The list of textures as filepaths.
+  ///
+  /// # Returns
+  /// A list of texture handles, corresponding to textures on the GPU. Texture
+  /// handles are returned in a slice with the indices corresponding to the
+  /// indices in the slice of texture files given.
+  ///
+  /// # Errors
+  /// Each texture may cause an error separately. Errors may occur if a texture
+  /// is too big for the texture cache, or if there was an error loading the
+  /// image etc.
+  pub fn cache_tex<F: AsRef<Path>>(&self, filepaths: &[F]) -> Vec<Result<TexHandle, CacheTexError>> {
+    self.renderer.cache_tex(&self.display, filepaths)
   }
 
   /// Get the size of the display in pixels.

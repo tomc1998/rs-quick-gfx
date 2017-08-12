@@ -67,12 +67,14 @@ impl BinaryTreeNode {
   /// * `w` - The width of the rectangle in UV coordinates.
   /// * `h` - The height of the rectangle in UV coordinates.
   /// * `tex` - The texture handle of the texture we're packing.
+  /// # Returns
+  /// The rect the texture was placed in.
   /// # Errors
   /// Returns an error if the given rect is too small for this space.
   /// # Notes
   /// If this node is not a leaf node, then this function will be recursively
   /// called on the child nodes of this node.
-  pub fn pack_rect(&mut self, w: f32, h: f32, tex: TexHandle) -> Result<(), PackRectError> {
+  pub fn pack_rect(&mut self, w: f32, h: f32, tex: TexHandle) -> Result<[f32; 4], PackRectError> {
     if !self.is_leaf() {
       // Recurse.
       debug_assert!(self.l_child.is_some() && self.r_child.is_some(), 
@@ -113,6 +115,6 @@ impl BinaryTreeNode {
     self.space = [self.space[0], self.space[1], w, h];
     self.tex_handle = Some(tex);
 
-    return Ok(());
+    return Ok(self.space.clone());
   }
 }

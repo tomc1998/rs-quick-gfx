@@ -48,8 +48,9 @@ impl GliumTexCache {
 }
 
 impl TexCache for GliumTexCache {
-  /// This must be called on the main thread, with the GL context as it may create textures.
-  #[allow(unused_variables)]
+  /// This must be called on the main thread, with the GL context as it may
+  /// create textures (this is enforced by the need to pass in the
+  /// glium::Display).
   fn cache_tex<F: AsRef<Path>>(
     &mut self, display: &glium::Display, 
     filepaths: &[F]) -> Vec<Result<TexHandle, CacheTexError>> {
@@ -76,13 +77,12 @@ impl TexCache for GliumTexCache {
       }
 
       // Load into an actual 'image',       
-      use image::GenericImage;
       let img = image::load_from_memory(buf.as_slice());
       if img.is_err() {
         result.push(Err(CacheTexError::ImageError(img.err().unwrap())));
         continue;
       }
-      let img = img.unwrap();
+      let img = img.unwrap().to_rgba();
 
       // Check if the cache tex size is big enough to contain this texture.
       let (w, h) = img.dimensions();
@@ -94,16 +94,18 @@ impl TexCache for GliumTexCache {
       let tex_handle = self.get_next_tex_handle();
       // Now try and fit it into the cache using the bin packing algorithm.
       // Loop over all the current textures and try to pack_rect.
-      let mut packed = false;
+      let mut tex_ix = None;
+      let mut rect = None;
       for (ii, t) in self.bin_pack_trees.iter_mut().enumerate() {
         let res = t.pack_rect(w as f32 / self.cache_texture_size.0 as f32, 
                               h as f32 / self.cache_texture_size.1 as f32, 
                               tex_handle);
-        if res.is_ok() { packed = true; break; }
+        if res.is_ok() { tex_ix = Some(ii); rect = Some(res.unwrap()); break; }
       }
+
       // If we haven't managed to pack the texture into existing cache
       // textures, then we need to create a new texture2d.
-      if !packed {
+      if tex_ix.is_none() {
         if self.cache_textures.len() >= self.max_cache_textures {
           result.push(Err(CacheTexError::NoSpace));
           continue;
@@ -134,11 +136,22 @@ impl TexCache for GliumTexCache {
 
         // Pack the rect into this new texture.  No need to error handle this
         // one, too small error handled earlier in this function
-        self.bin_pack_trees.last_mut().unwrap().pack_rect( 
+        rect = Some(self.bin_pack_trees.last_mut().unwrap().pack_rect( 
           w as f32 / self.cache_texture_size.0 as f32, 
           h as f32 / self.cache_texture_size.1 as f32, 
-          tex_handle).unwrap();
+          tex_handle).unwrap());
+        tex_ix = Some(self.cache_textures.len() - 1);
       }
+
+      // Actually buffer to the GPU.
+      let tex_ix = tex_ix.unwrap();
+      let rect = rect.unwrap();
+      self.cache_textures[tex_ix].main_level().write(glium::Rect {
+        left: (self.cache_texture_size.0 as f32 * rect[0]) as u32,
+        bottom: (self.cache_texture_size.1 as f32 * rect[1]) as u32,        
+        width: (self.cache_texture_size.0 as f32 * rect[2]) as u32,        
+        height: (self.cache_texture_size.1 as f32 * rect[3]) as u32,      
+      }, glium::texture::RawImage2d::from_raw_rgba_reversed(&img.into_raw(), (w, h)));
     }
 
     return result;
