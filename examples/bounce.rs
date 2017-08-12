@@ -66,7 +66,7 @@ fn main() {
     }
 
     // Render the circle
-    controller.circle(&ball_pos, ball_rad, 32, &[1.0, 0.0, 1.0, 0.0]);
+    controller.circle(&ball_pos, ball_rad, 32, &[1.0, 0.0, 1.0, 1.0]);
     qgfx.recv_data();
     qgfx.render();
   }
