@@ -34,11 +34,11 @@ pub struct Vertex {
   pub tex_coords: [f32; 2],
   /// The colour of this vertex. Sent to the shader.
   pub col: [f32; 4],
-  /// The type of texture this vertex will use. See enum TexType. NOT sent to the shader.
-  pub tex_type: TexType,
+  pub tex_type: TexType, 
   /// The index of the texture in the cache to use. Texture caches can have
   /// multiple textures stored in video ram, this number indicates which to
   /// use. NOT sent to the shader.
+  /// Negative means look to font caches, positive means tex caches.
   pub tex_ix: usize,
 }
 implement_vertex!(Vertex, pos, tex_coords, col);
@@ -53,7 +53,12 @@ pub struct Renderer<'a> {
   /// The vertex data to be draw when render() is called. Data is moved into
   /// this buffer when `recv_data()` is called, then moved to the VBO for
   /// rendering in `render()`.
-  v_data: Vec<Vertex>,
+  ///
+  /// This is a 'list of lists', so to speak. The list is sorted so that the
+  /// vertices that need to be drawn with a given texture are grouped together.
+  /// The texture ID is negative if it corresponds to a font texture cache, or
+  /// positive for a standard texture cache.
+  v_data_list: Vec<(usize, TexType, Vec<Vertex>)>,
 
   /// A tuple containing a sender and receiver - used for sending data to
   /// the renderer from different threads to be stored in v_data for the
@@ -79,7 +84,7 @@ impl<'a> Renderer<'a>{
     Box::new(Renderer {
       vbo: VertexBuffer::empty_dynamic(display, VBO_SIZE).unwrap(),
       program: shader::get_program(display),
-      v_data: Vec::new(),
+      v_data_list: Vec::new(),
       v_channel_pair: mpsc::channel(),
       font_cache: Arc::new(Mutex::new(font_cache)),
       tex_cache: Arc::new(Mutex::new(GliumTexCache::new())),
@@ -94,7 +99,7 @@ impl<'a> Renderer<'a>{
   /// (`SysRenderer`) to the VBO to be rendered. This should be called before
   /// `render()`.
   pub fn recv_data(&mut self) {
-    self.v_data.clear();
+    let mut v_data_list : Vec<(usize, TexType, Vec<Vertex>)> = Vec::new();
     // VBO_SIZE, no more data must be buffered.
     loop {
       let res = self.v_channel_pair.1.try_recv();
@@ -110,58 +115,96 @@ impl<'a> Renderer<'a>{
       // Copy data from the packet into v_data
       let data_packet = res.unwrap();
 
+      'Outer:
       for v in data_packet {
-        self.v_data.push(v);
-
-        // Check data packet won't be too long
-        #[cfg(feature = "vbo_overflow_panic")]
-        { if self.v_data.len() >= VBO_SIZE { panic!("VBO Overflow"); } }
+        // Find the right list to insert this vertex into
+        for &mut (id, tex_type, ref mut list) in &mut v_data_list {
+          if id == v.tex_ix && tex_type == v.tex_type {
+            list.push(v);
+            continue 'Outer;
+          }
+        }
+        // If we're here, we couldn't find a list to insert into. We need to
+        // create a new tuple and push it onto v_data_list.
+        let mut list = Vec::new();
+        list.push(v);
+        v_data_list.push((v.tex_ix, v.tex_type, list));
       }
     }
 
-    while self.v_data.len() < VBO_SIZE {
-      self.v_data.push(Vertex { 
-        pos: [0.0; 2], col: [0.0; 4], 
-        tex_coords: [0.0, 0.0], 
-        tex_ix: 0, tex_type: TexType::Texture} );
+    // Check data packet won't be too long
+    #[cfg(feature = "vbo_overflow_panic")]
+    { 
+      for &(_, _, ref list) in &v_data_list {
+        if list.len() >= VBO_SIZE { panic!("VBO Overflow"); } 
+      }
     }
+
+    for &mut (_, _, ref mut list) in &mut v_data_list {
+      while list.len() < VBO_SIZE {
+        list.push(Vertex { 
+          pos: [0.0; 2], col: [0.0; 4], 
+          tex_coords: [0.0, 0.0], 
+          tex_ix: 0, tex_type: TexType::Texture} );
+      }
+    }
+
+    self.v_data_list = v_data_list;
   }
 
   pub fn render<T : glium::Surface>(&mut self, target: &mut T) {
+    for &(tex_id, tex_type, ref list) in &self.v_data_list {
+      // Empty indices - basically only rendering sprites, so no need to have it indexed.
+      let indices = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
 
-    // Empty indices - basically only rendering sprites, so no need to have it indexed.
-    let indices = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
+      // Write the vertex data to the VBO
+      self.vbo.write(list);
 
-    // Write the vertex data to the VBO
-    self.vbo.write(&self.v_data);
+      // Get the texture
+      let font_cache = self.font_cache.lock().unwrap();
+      let tex_cache = self.tex_cache.lock().unwrap();
+      let tex;
+      match tex_type {
+        TexType::Texture => {
+          use res::tex::TexCache;
+          tex = tex_cache.get_tex_with_ix(tex_id as usize);
+        },
+        TexType::Font => tex = Some(font_cache.get_tex()),
+      }
 
-    let font_cache = self.font_cache.lock().unwrap();
-    let tex = font_cache.get_tex();
+      // No texture found? Panic.
+      if tex.is_none() { panic!(r#"Vertex data with tex ID buffered, but
+                                texture with this ix does not exist."#); } 
 
-    // Load the uniforms
-    let uniforms = uniform! {
-      proj_mat: self.proj_mat,
-      tex: tex,
-    };
+      // Load the uniforms
+      let uniforms = uniform! {
+        proj_mat: self.proj_mat,
+        is_font: if tex_type == TexType::Font { 1 } else { 0 },
+        tex: tex.unwrap(),
+      };
 
-    // Draw everything!
-    target.draw(&self.vbo, 
-                &indices, 
-                &self.program, 
-                &uniforms, 
-                &glium::DrawParameters {
-                  blend: glium::Blend::alpha_blending(),
-                  .. Default::default()
-                }).unwrap();
+      // Draw everything!
+      target.draw(&self.vbo, 
+                  &indices, 
+                  &self.program, 
+                  &uniforms, 
+                  &glium::DrawParameters {
+                    blend: glium::Blend::alpha_blending(),
+                    .. Default::default()
+                  }).unwrap();
+    }
   }
 
+  /// # Params
+  /// * `white` - The texture handle to use for white. This is for rendering
+  ///             coloured shapes, as opposed to textured ones.
   /// # Returns
   /// A Sender<Vertex> for sending vertex data to the renderer. When
   /// render() is called, this data will be rendered then cleared.
-  pub fn get_renderer_controller(&self) -> Box<RendererController<'a>> {
+  pub fn get_renderer_controller(&self, white: TexHandle) -> Box<RendererController<'a>> {
     RendererController::new(self.v_channel_pair.0.clone(), 
                             self.font_cache.clone(), 
-                            self.tex_cache.clone())
+                            self.tex_cache.clone(), white)
   }
 
   /// A function to add the given chars to the cache. See res::font::FontCache
@@ -180,6 +223,14 @@ impl<'a> Renderer<'a>{
     filepaths: &[F]) -> Vec<Result<TexHandle, CacheTexError>> {
     use res::tex::TexCache;
     self.tex_cache.lock().unwrap().cache_tex(display, filepaths)
+  }
+
+  /// Cache textures from bytes, returning a list of texture handles.
+  pub fn cache_tex_from_bytes(
+    &self, display: &glium::Display, 
+    bytes: &[&[u8]]) -> Vec<Result<TexHandle, CacheTexError>> {
+    use res::tex::TexCache;
+    self.tex_cache.lock().unwrap().cache_tex_from_bytes(display, bytes)
   }
 }
 

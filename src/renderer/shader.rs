@@ -28,13 +28,26 @@ pub fn get_program(display: &glium::Display) -> glium::Program {
 
     uniform sampler2D tex;
 
+    // If we're rendering a font, we only care about the r value of the tex.
+    // Otherwise, we care about the colour. Will be 1 if we're rendering a font.
+    uniform int is_font;
+
     in vec4 v_col;
     in vec2 v_tex_coords;
 
     out vec4 color;
 
     void main() {
-      color = texture(tex, v_tex_coords).xxxx;
+      if (is_font > 0) {
+        color = vec4(v_col.rgb, texture(tex, v_tex_coords).r);
+      }
+      else {
+        vec4 pixel = texture(tex, v_tex_coords);
+        color = vec4(pixel.r * v_col.r, 
+                     pixel.g * v_col.g, 
+                     pixel.b * v_col.b, 
+                     pixel.a * v_col.a);
+      }
     }
   "#;
   glium::Program::from_source(display, v_shader, f_shader, None).unwrap()

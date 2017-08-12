@@ -33,7 +33,7 @@ impl GliumTexCache {
   pub fn new() -> GliumTexCache {
     GliumTexCache {
       max_cache_textures: 0,
-      cache_texture_size: (2048, 2048),
+      cache_texture_size: (128, 128),
       cache_textures: Vec::new(),
       bin_pack_trees: Vec::new(),
       next_tex_handle: TexHandle(0),
@@ -45,39 +45,21 @@ impl GliumTexCache {
     self.next_tex_handle.0 += 1;
     return th;
   }
-}
 
-impl TexCache for GliumTexCache {
-  /// This must be called on the main thread, with the GL context as it may
-  /// create textures (this is enforced by the need to pass in the
-  /// glium::Display).
-  fn cache_tex<F: AsRef<Path>>(
+  /// The method to actually internally cache textures. Called by both of the
+  /// caching methods implemented when implementing the TexCache trait.
+  fn cache_tex_internal(
     &mut self, display: &glium::Display, 
-    filepaths: &[F]) -> Vec<Result<TexHandle, CacheTexError>> {
-
-    use std::fs::File;
-    use std::io::Read;
-    let mut result = Vec::with_capacity(filepaths.len());
-    // Load all the textures given.
-    for f in filepaths {
-      // Try open the file
-      let file = File::open(f);
-      if file.is_err() {
-        result.push(Err(CacheTexError::IoError(file.err().unwrap())));
+    bytes: Vec<Result<&[u8], CacheTexError>>) -> Vec<Result<TexHandle, CacheTexError>> {
+    let mut result = Vec::with_capacity(bytes.len());
+    for buf in bytes {
+      if buf.is_err() { 
+        result.push(Err(buf.err().unwrap()));
         continue;
       }
-      let mut file = file.unwrap();
-
-      // Read all the file data
-      let mut buf = Vec::new();
-      let read_res = file.read_to_end(&mut buf);
-      if read_res.is_err() {
-        result.push(Err(CacheTexError::IoError(read_res.err().unwrap())));
-        continue;
-      }
-
+      let buf = buf.unwrap();
       // Load into an actual 'image',       
-      let img = image::load_from_memory(buf.as_slice());
+      let img = image::load_from_memory(buf);
       if img.is_err() {
         result.push(Err(CacheTexError::ImageError(img.err().unwrap())));
         continue;
@@ -106,16 +88,17 @@ impl TexCache for GliumTexCache {
       // If we haven't managed to pack the texture into existing cache
       // textures, then we need to create a new texture2d.
       if tex_ix.is_none() {
-        if self.cache_textures.len() >= self.max_cache_textures {
-          result.push(Err(CacheTexError::NoSpace));
-          continue;
-        }
+        if self.max_cache_textures > 0 && 
+          self.cache_textures.len() >= self.max_cache_textures {
+            result.push(Err(CacheTexError::NoSpace));
+            continue;
+          }
 
         use std::borrow::Cow;
         let data_len = self.cache_texture_size.0 as usize 
           * self.cache_texture_size.1 as usize;
-        let mut data = Vec::with_capacity(data_len);
-        data.resize(data_len, 0.0);
+        let mut data = Vec::with_capacity(data_len*4);
+        data.resize(data_len*4, 0.0);
         let tex = Texture2d::new(display, RawImage2d {
           data: Cow::Owned(data),
           width: self.cache_texture_size.0,
@@ -137,9 +120,9 @@ impl TexCache for GliumTexCache {
         // Pack the rect into this new texture.  No need to error handle this
         // one, too small error handled earlier in this function
         rect = Some(self.bin_pack_trees.last_mut().unwrap().pack_rect( 
-          w as f32 / self.cache_texture_size.0 as f32, 
-          h as f32 / self.cache_texture_size.1 as f32, 
-          tex_handle).unwrap());
+            w as f32 / self.cache_texture_size.0 as f32, 
+            h as f32 / self.cache_texture_size.1 as f32, 
+            tex_handle).unwrap());
         tex_ix = Some(self.cache_textures.len() - 1);
       }
 
@@ -152,9 +135,51 @@ impl TexCache for GliumTexCache {
         width: (self.cache_texture_size.0 as f32 * rect[2]) as u32,        
         height: (self.cache_texture_size.1 as f32 * rect[3]) as u32,      
       }, glium::texture::RawImage2d::from_raw_rgba_reversed(&img.into_raw(), (w, h)));
+
+      result.push(Ok(tex_handle));
     }
 
     return result;
+  }
+}
+
+impl TexCache for GliumTexCache {
+  fn cache_tex<F: AsRef<Path>>(
+    &mut self, display: &glium::Display, 
+    filepaths: &[F]) -> Vec<Result<TexHandle, CacheTexError>> {
+    use std::fs::File;
+    use std::io::Read;
+    let mut result = Vec::with_capacity(filepaths.len());
+    // Load all the textures given.
+    for f in filepaths {
+      // Try open the file
+      let file = File::open(f);
+      if file.is_err() {
+        result.push(Err(CacheTexError::IoError(file.err().unwrap())));
+        continue;
+      }
+      let mut file = file.unwrap();
+
+      // Read all the file data
+      let mut buf = Vec::new();
+      let read_res = file.read_to_end(&mut buf);
+      if read_res.is_err() {
+        result.push(Err(CacheTexError::IoError(read_res.err().unwrap())));
+        continue;
+      }
+    }
+    self.cache_tex_internal(display, result)
+  }
+
+  /// This must be called on the main thread, with the GL context as it may
+  /// create textures (this is enforced by the need to pass in the
+  /// glium::Display).
+  fn cache_tex_from_bytes(
+    &mut self, display: &glium::Display, 
+    bytes: &[&[u8]]) -> Vec<Result<TexHandle, CacheTexError>> {
+    let vec : Vec<Result<&[u8], CacheTexError>> 
+      = bytes.iter().map(|buf| Ok(*buf)).collect();
+    self.cache_tex_internal(display, vec)
   }
 
 #[allow(unused_variables)]

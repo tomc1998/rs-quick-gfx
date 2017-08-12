@@ -46,6 +46,7 @@ impl std::convert::From<CacheReadError> for RenderTextureError {
 pub struct RendererController<'a> {
   font_cache: Arc<Mutex<GliumFontCache<'a>>>,
   tex_cache: Arc<Mutex<GliumTexCache>>,
+  white: TexHandle,
   sender: mpsc::Sender<Vec<Vertex>>,
 }
 
@@ -55,11 +56,28 @@ impl<'a> RendererController<'a> {
   /// renderer::Renderer::get_renderer_controller() function.
   pub fn new(sender: mpsc::Sender<Vec<Vertex>>, 
              font_cache: Arc<Mutex<GliumFontCache<'a>>>,
-             tex_cache: Arc<Mutex<GliumTexCache>>) -> Box<RendererController<'a>> {
+             tex_cache: Arc<Mutex<GliumTexCache>>,
+             white: TexHandle) -> Box<RendererController<'a>> {
     Box::new(RendererController { 
       sender: sender, 
       font_cache: font_cache, 
-      tex_cache: tex_cache})
+      tex_cache: tex_cache,
+      white: white,
+    })
+  }
+
+  /// Lookup a texture handle, and transform the rectangle coordinates into x0,
+  /// y0, x1, y1 (as opposed to x,y,w,h).
+  fn lookup_tex(&self, tex: TexHandle) -> Option<(usize, [f32; 4])> {
+    use res::tex::TexCache;
+    // Get the index of this texture.
+    let ix_rect_opt = { self.tex_cache.lock().unwrap().rect_for(tex) };
+    if ix_rect_opt.is_none() { return None; }
+    let (tex_ix, mut rect) = ix_rect_opt.unwrap();
+    // Transform from x,y,w,h to x0,y0,x1,y1
+    rect[2] = rect[0] + rect[2];
+    rect[3] = rect[1] + rect[3];
+    Some((tex_ix, rect))
   }
 
   /// Draws a line given a start and an endpoint.
@@ -127,40 +145,45 @@ impl<'a> RendererController<'a> {
   pub fn rect(&self, aabb: &[f32; 4], col: &[f32; 4]) {
     let mut data = Vec::with_capacity(6);
 
+    // Lookup white texture
+    let (tex_ix, rect) = self.lookup_tex(self.white).unwrap();
+    let t_x = (rect[0] + rect[2]) / 2.0;
+    let t_y = (rect[1] + rect[3]) / 2.0;
+
     // Generate vertex data
     // Tri 1
     data.push( Vertex { 
       pos: [aabb[0], aabb[1]], 
       col: col.clone(), 
-      tex_type: TexType::Texture, tex_ix: 0,
-      tex_coords: [0.0, 0.0] });
+      tex_type: TexType::Texture, tex_ix: tex_ix,
+      tex_coords: [t_x, t_y] });
     data.push( Vertex { 
       pos: [aabb[0] + aabb[2], aabb[1]], 
       col: col.clone(), 
-      tex_type: TexType::Texture, tex_ix: 0,
-      tex_coords: [1.0, 0.0] });
+      tex_type: TexType::Texture, tex_ix: tex_ix,
+      tex_coords: [t_x, t_y] });
     data.push( Vertex { 
       pos: [aabb[0] + aabb[2], aabb[1] + aabb[3]], 
       col: col.clone(), 
-      tex_type: TexType::Texture, tex_ix: 0,
-      tex_coords: [1.0, 1.0] });
+      tex_type: TexType::Texture, tex_ix: tex_ix,
+      tex_coords: [t_x, t_y] });
 
     // Tri 2
     data.push( Vertex { 
       pos: [aabb[0], aabb[1]], 
       col: col.clone(), 
-      tex_type: TexType::Texture, tex_ix: 0,
-      tex_coords: [0.0, 0.0] });
+      tex_type: TexType::Texture, tex_ix: tex_ix,
+      tex_coords: [t_x, t_y] });
     data.push( Vertex { 
       pos: [aabb[0], aabb[1] + aabb[3]], 
       col: col.clone(), 
-      tex_type: TexType::Texture, tex_ix: 0,
-      tex_coords: [0.0, 1.0] });
+      tex_type: TexType::Texture, tex_ix: tex_ix,
+      tex_coords: [t_x, t_y] });
     data.push( Vertex { 
       pos: [aabb[0] + aabb[2], aabb[1] + aabb[3]], 
       col: col.clone(), 
-      tex_type: TexType::Texture, tex_ix: 0,
-      tex_coords: [1.0, 1.0] });
+      tex_type: TexType::Texture, tex_ix: tex_ix,
+      tex_coords: [t_x, t_y] });
 
     // Send the data
     self.sender.send(data).unwrap();
@@ -174,6 +197,12 @@ impl<'a> RendererController<'a> {
   /// * `col` - The colour of the circle.
   pub fn circle(&self, pos: &[f32; 2], rad: f32, segments: usize, col: &[f32; 4]) {
     use std::f64::consts::PI;
+
+    // Lookup white texture
+    let (tex_ix, rect) = self.lookup_tex(self.white).unwrap();
+    let t_x = (rect[0] + rect[2]) / 2.0;
+    let t_y = (rect[1] + rect[3]) / 2.0;
+
     let mut data = Vec::with_capacity(segments*3);
     let mut curr_angle = 0.0f32;
     let angle_increment = 2.0*(PI as f32)*(1.0 / segments as f32);
@@ -182,23 +211,23 @@ impl<'a> RendererController<'a> {
       data.push(Vertex {
         pos: pos.clone(), 
         col: col.clone(), 
-        tex_type: TexType::Texture, tex_ix: 0,
-        tex_coords: [0.0, 0.0]});
+        tex_type: TexType::Texture, tex_ix: tex_ix,
+        tex_coords: [t_x, t_y]});
 
       // Other two vertices of the triangle
       data.push(Vertex {
         pos: [
           pos[0] + rad*(curr_angle.cos()), 
           pos[1] + rad*(curr_angle.sin())], 
-        tex_type: TexType::Texture, tex_ix: 0,
-        col: col.clone(), tex_coords: [0.0, 0.0]
+        tex_type: TexType::Texture, tex_ix: tex_ix,
+        col: col.clone(), tex_coords: [t_x, t_y]
       });
       data.push(Vertex {
         pos: [
           pos[0] + rad*((curr_angle+angle_increment).cos()), 
           pos[1] + rad*((curr_angle+angle_increment).sin())], 
-        tex_type: TexType::Texture, tex_ix: 0,
-        col: col.clone(), tex_coords: [0.0, 0.0]
+        tex_type: TexType::Texture, tex_ix: tex_ix,
+        col: col.clone(), tex_coords: [t_x, t_y]
       });
 
       // Increment the angle for the next loop
@@ -216,16 +245,8 @@ impl<'a> RendererController<'a> {
   /// * `tint` - The colour to tint the texture.
   pub fn tex(&self, tex: TexHandle, aabb: &[f32; 4], 
              tint: &[f32; 4]) -> Result<(), RenderTextureError> {
-    use res::tex::TexCache;
-    // Get the index of this texture.
-    let ix_rect_opt = { self.tex_cache.lock().unwrap().rect_for(tex) };
-    if ix_rect_opt.is_none() { return Err(RenderTextureError); }
-    let (tex_ix, mut rect) = ix_rect_opt.unwrap();
-    // Transform from x,y,w,h to x0,y0,x1,y1
-    rect[2] = rect[0] + rect[2];
-    rect[3] = rect[1] + rect[3];
-
     let (x, y, w, h) = (aabb[0], aabb[1], aabb[2], aabb[3]);
+    let (tex_ix, rect) = try!(self.lookup_tex(tex).ok_or(RenderTextureError));
 
     let mut vertices = Vec::with_capacity(6);
     // Generate vertex data.

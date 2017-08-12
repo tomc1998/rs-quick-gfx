@@ -29,6 +29,8 @@ pub struct QGFX<'a> {
   renderer: Box<Renderer<'a>>,
   display: Display,
   events_loop: Mutex<EventsLoop>,
+  /// A tex handle for a 1x1 white texture. Used when rendering colours.
+  white_tex_handle: TexHandle,
 }
 
 impl<'a> QGFX<'a> {
@@ -36,17 +38,34 @@ impl<'a> QGFX<'a> {
   pub fn new() -> QGFX<'a> {
     let (display, events_loop) = init_display();
     let renderer = Renderer::new(&display);
+
+    // We need to buffer a small white rectangle, for when drawing coloured
+    // shapes. The following is an array for a bitmap with a 1x1 white pixel.
+    let bytes = [0x42, 0x4d, 0x42, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                 0x3e, 0x00, 0x00, 0x00, 0x28, 0x00, 0x00, 0x00, 0x01, 0x00,
+                 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00,
+                 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00,
+                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff,
+                 0xff, 0x00, 0x80, 0x00, 0x00, 0x00];
+    let t_vec_ref = &renderer.cache_tex_from_bytes(&display, &[&bytes[..]])[0];
+    if t_vec_ref.is_err() {
+      println!("{:?}", t_vec_ref.as_ref().err().unwrap());
+    }
+    let white_tex_handle = t_vec_ref.as_ref().unwrap();
+
     QGFX { 
       renderer: renderer,
       display: display,
       events_loop: Mutex::new(events_loop),
+      white_tex_handle: white_tex_handle.clone(),
     }
   }
 
   /// Get a renderer controller to send VBO data to this renderer. These can be
   /// cloned.
   pub fn get_renderer_controller(&self) -> Box<RendererController<'a>> {
-    return self.renderer.get_renderer_controller();
+    return self.renderer.get_renderer_controller(self.white_tex_handle);
   }
 
   /// Cache some glyphs from a font.
@@ -73,6 +92,10 @@ impl<'a> QGFX<'a> {
   /// image etc.
   pub fn cache_tex<F: AsRef<Path>>(&self, filepaths: &[F]) -> Vec<Result<TexHandle, CacheTexError>> {
     self.renderer.cache_tex(&self.display, filepaths)
+  }
+
+  pub fn cache_tex_from_bytes(&self, bytes: &[&[u8]]) -> Vec<Result<TexHandle, CacheTexError>> {
+    self.renderer.cache_tex_from_bytes(&self.display, bytes)
   }
 
   /// Get the size of the display in pixels.
