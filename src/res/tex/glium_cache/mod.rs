@@ -33,7 +33,7 @@ impl GliumTexCache {
   pub fn new() -> GliumTexCache {
     GliumTexCache {
       max_cache_textures: 0,
-      cache_texture_size: (128, 128),
+      cache_texture_size: (2048, 2048),
       cache_textures: Vec::new(),
       bin_pack_trees: Vec::new(),
       next_tex_handle: TexHandle(0),
@@ -150,8 +150,11 @@ impl TexCache for GliumTexCache {
     use std::fs::File;
     use std::io::Read;
     let mut result = Vec::with_capacity(filepaths.len());
+    let mut bufs = Vec::with_capacity(filepaths.len());
+    bufs.resize(filepaths.len(), Vec::new());
+
     // Load all the textures given.
-    for f in filepaths {
+    for (ii, f) in filepaths.iter().enumerate() {
       // Try open the file
       let file = File::open(f);
       if file.is_err() {
@@ -167,8 +170,18 @@ impl TexCache for GliumTexCache {
         result.push(Err(CacheTexError::IoError(read_res.err().unwrap())));
         continue;
       }
+      bufs.insert(ii, buf);
+      result.push(Ok(())); 
     }
-    self.cache_tex_internal(display, result)
+
+    let mut result_slices = Vec::with_capacity(filepaths.len());
+    for (ii, r) in result.into_iter().enumerate() {
+      if r.is_ok() { result_slices.push(Ok(bufs[ii].as_slice())); }
+      else { result_slices.push(Err(r.unwrap_err())); }
+    }
+
+    // Need to map the owned data into slices now.
+    self.cache_tex_internal(display, result_slices)
   }
 
   /// This must be called on the main thread, with the GL context as it may
