@@ -22,7 +22,7 @@ pub struct GliumFontCache<'a> {
   /// The cache (not including actual texture storage).
   cache: rusttype::gpu_cache::Cache,
   /// The texture storage for the font cache.
-  cache_tex: glium::texture::Texture2d,
+  cache_tex: glium::texture::srgb_texture2d::SrgbTexture2d,
 }
 impl<'a> std::fmt::Debug for GliumFontCache<'a> {
   fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
@@ -45,7 +45,7 @@ impl<'a> GliumFontCache<'a> {
       // tolerance (we aren't using positioning).
       cache: rusttype::gpu_cache::Cache::new(CACHE_W, CACHE_H, 0.1, 1.0),
       // Create a new glium 2d texture with the cache width and height as the texture size.
-      cache_tex: glium::texture::Texture2d::with_format(
+      cache_tex: glium::texture::srgb_texture2d::SrgbTexture2d::with_format(
         display,
         glium::texture::RawImage2d {
           data: Cow::Owned(vec![0u8; CACHE_W as usize * CACHE_H as usize]),
@@ -53,7 +53,7 @@ impl<'a> GliumFontCache<'a> {
           height: CACHE_H,
           format: glium::texture::ClientFormat::U8
         },
-        glium::texture::UncompressedFloatFormat::U8,
+        glium::texture::SrgbFormat::U8U8U8U8,
         glium::texture::MipmapsOption::NoMipmap).unwrap(),
     }
   }
@@ -89,7 +89,7 @@ impl<'a> GliumFontCache<'a> {
     return fh;
   }
 
-  pub fn get_tex(&self) -> &glium::texture::Texture2d { &self.cache_tex }
+  pub fn get_tex(&self) -> &glium::texture::srgb_texture2d::SrgbTexture2d { &self.cache_tex }
 }
 
 impl<'a> FontCache for GliumFontCache<'a> {

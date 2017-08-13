@@ -1,7 +1,8 @@
 //! A module containing a glium implementation of a tex cache.
 
 use glium;
-use glium::texture::{Texture2d, RawImage2d};
+use glium::texture::{RawImage2d};
+use glium::texture::srgb_texture2d::SrgbTexture2d;
 use res::tex::*;
 use image;
 
@@ -18,7 +19,7 @@ pub struct GliumTexCache {
   cache_texture_size: (u32, u32),
 
   /// The list of cache textures.
-  cache_textures: Vec<Texture2d>,
+  cache_textures: Vec<SrgbTexture2d>,
 
   /// This is a list of root nodes for binary trees. They're used to pack
   /// textures into the cache. Each index in this vector matches a cache
@@ -99,7 +100,7 @@ impl GliumTexCache {
           * self.cache_texture_size.1 as usize;
         let mut data = Vec::with_capacity(data_len*4);
         data.resize(data_len*4, 0.0);
-        let tex = Texture2d::new(display, RawImage2d {
+        let tex = SrgbTexture2d::new(display, RawImage2d {
           data: Cow::Owned(data),
           width: self.cache_texture_size.0,
           height: self.cache_texture_size.1,
@@ -212,7 +213,7 @@ impl TexCache for GliumTexCache {
     return None;
   }
 
-  fn get_tex_with_ix(&self, ix: usize) -> Option<&Texture2d> {
+  fn get_tex_with_ix(&self, ix: usize) -> Option<&SrgbTexture2d> {
     if self.cache_textures.len() <= ix { None }
     else { Some(&self.cache_textures[ix]) }
   }
