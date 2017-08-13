@@ -112,7 +112,7 @@ impl<'a> QGFX<'a> {
   pub fn render(&mut self) {
     use glium::Surface;
     let mut target = self.display.draw();
-    target.clear_color(0.0, 0.0, 0.0, 1.0);
+    target.clear_color(1.0, 1.0, 1.0, 1.0);
     self.renderer.render(&mut target);
     target.finish().unwrap();
   }
