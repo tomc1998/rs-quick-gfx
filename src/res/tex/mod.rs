@@ -4,7 +4,7 @@ use glium;
 use std;
 use image;
 use std::path::Path;
-use glium::texture::Texture2d;
+use glium::texture::srgb_texture2d::SrgbTexture2d;
 
 /// A texture handle. This references a texture loaded into the cache.
 #[derive(PartialOrd, Ord, PartialEq, Eq, Copy, Clone)]
@@ -71,7 +71,7 @@ pub trait TexCache {
 
   /// Gets a reference to the cache texture with the given index. If the
   /// texture is not found, returns None.
-  fn get_tex_with_ix(&self, ix: usize) -> Option<&Texture2d>;
+  fn get_tex_with_ix(&self, ix: usize) -> Option<&SrgbTexture2d>;
 
   /// Sets the maximum amount of cache textures to create. 0 means limitless.
   /// If you put a cap on the amount of textures that can be used to cache on

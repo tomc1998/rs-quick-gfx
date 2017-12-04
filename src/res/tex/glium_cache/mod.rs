@@ -1,7 +1,8 @@
 //! A module containing a glium implementation of a tex cache.
 
 use glium;
-use glium::texture::{Texture2d, RawImage2d};
+use glium::texture::{RawImage2d};
+use glium::texture::srgb_texture2d::SrgbTexture2d;
 use res::tex::*;
 use image;
 
@@ -18,7 +19,7 @@ pub struct GliumTexCache {
   cache_texture_size: (u32, u32),
 
   /// The list of cache textures.
-  cache_textures: Vec<Texture2d>,
+  cache_textures: Vec<SrgbTexture2d>,
 
   /// This is a list of root nodes for binary trees. They're used to pack
   /// textures into the cache. Each index in this vector matches a cache
@@ -33,7 +34,7 @@ impl GliumTexCache {
   pub fn new() -> GliumTexCache {
     GliumTexCache {
       max_cache_textures: 0,
-      cache_texture_size: (128, 128),
+      cache_texture_size: (2048, 2048),
       cache_textures: Vec::new(),
       bin_pack_trees: Vec::new(),
       next_tex_handle: TexHandle(0),
@@ -99,7 +100,7 @@ impl GliumTexCache {
           * self.cache_texture_size.1 as usize;
         let mut data = Vec::with_capacity(data_len*4);
         data.resize(data_len*4, 0.0);
-        let tex = Texture2d::new(display, RawImage2d {
+        let tex = SrgbTexture2d::new(display, RawImage2d {
           data: Cow::Owned(data),
           width: self.cache_texture_size.0,
           height: self.cache_texture_size.1,
@@ -150,8 +151,11 @@ impl TexCache for GliumTexCache {
     use std::fs::File;
     use std::io::Read;
     let mut result = Vec::with_capacity(filepaths.len());
+    let mut bufs = Vec::with_capacity(filepaths.len());
+    bufs.resize(filepaths.len(), Vec::new());
+
     // Load all the textures given.
-    for f in filepaths {
+    for (ii, f) in filepaths.iter().enumerate() {
       // Try open the file
       let file = File::open(f);
       if file.is_err() {
@@ -167,8 +171,18 @@ impl TexCache for GliumTexCache {
         result.push(Err(CacheTexError::IoError(read_res.err().unwrap())));
         continue;
       }
+      bufs.insert(ii, buf);
+      result.push(Ok(())); 
     }
-    self.cache_tex_internal(display, result)
+
+    let mut result_slices = Vec::with_capacity(filepaths.len());
+    for (ii, r) in result.into_iter().enumerate() {
+      if r.is_ok() { result_slices.push(Ok(bufs[ii].as_slice())); }
+      else { result_slices.push(Err(r.unwrap_err())); }
+    }
+
+    // Need to map the owned data into slices now.
+    self.cache_tex_internal(display, result_slices)
   }
 
   /// This must be called on the main thread, with the GL context as it may
@@ -199,7 +213,7 @@ impl TexCache for GliumTexCache {
     return None;
   }
 
-  fn get_tex_with_ix(&self, ix: usize) -> Option<&Texture2d> {
+  fn get_tex_with_ix(&self, ix: usize) -> Option<&SrgbTexture2d> {
     if self.cache_textures.len() <= ix { None }
     else { Some(&self.cache_textures[ix]) }
   }

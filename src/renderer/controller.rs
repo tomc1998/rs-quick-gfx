@@ -254,37 +254,37 @@ impl<'a> RendererController<'a> {
       pos: [x, y],
       col: tint.clone(),
       tex_type: TexType::Texture, tex_ix: tex_ix,
-      tex_coords: [rect[0], rect[1]],
+      tex_coords: [rect[0], rect[3]],
     });
     vertices.push(Vertex {
       pos: [x + w, y],
       col: tint.clone(),
       tex_type: TexType::Texture, tex_ix: tex_ix,
-      tex_coords: [rect[2], rect[1]],
+      tex_coords: [rect[2], rect[3]],
     });
     vertices.push(Vertex {
       pos: [x + w, y + h],
       col: tint.clone(),
       tex_type: TexType::Texture, tex_ix: tex_ix,
-      tex_coords: [rect[2], rect[3]],
+      tex_coords: [rect[2], rect[1]],
     });
     vertices.push(Vertex {
       pos: [x, y],
       col: tint.clone(),
       tex_type: TexType::Texture, tex_ix: tex_ix,
-      tex_coords: [rect[0], rect[1]],
+      tex_coords: [rect[0], rect[3]],
     });
     vertices.push(Vertex {
       pos: [x, y + h],
       col: tint.clone(),
       tex_type: TexType::Texture, tex_ix: tex_ix,
-      tex_coords: [rect[0], rect[3]],
+      tex_coords: [rect[0], rect[1]],
     });
     vertices.push(Vertex {
       pos: [x + w, y + h],
       col: tint.clone(),
       tex_type: TexType::Texture, tex_ix: tex_ix,
-      tex_coords: [rect[2], rect[3]],
+      tex_coords: [rect[2], rect[1]],
     });
 
     self.sender.send(vertices).unwrap();
