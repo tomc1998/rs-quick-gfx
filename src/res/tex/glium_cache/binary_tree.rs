@@ -3,7 +3,7 @@
 
 use std::fmt;
 use std;
-use res::tex::TexHandle;
+use res::tex::{TexHandle, TexHandleLookup};
 
 #[derive(Clone, Copy, Debug)]
 pub enum PackRectError {
@@ -133,6 +133,36 @@ impl BinaryTreeNode {
     if res.is_some() { return res; }
     if self.r_child.is_some() {
       return self.r_child.as_ref().unwrap().rect_for(tex_handle);
+    }
+    return None;
+  }
+}
+
+pub type BinaryTree = Vec<BinaryTreeNode>;
+
+impl TexHandleLookup for BinaryTree {
+  fn is_tex_cached(&self, tex: TexHandle) -> bool {
+    self.rect_for(tex).is_some()
+  }
+
+  fn rect_for(&self, tex: TexHandle) -> Option<(usize, [f32; 4])> {
+    for (ii, t) in self.iter().enumerate() {
+      let res = t.rect_for(tex);
+      if res.is_some() { return Some((ii, res.unwrap())); };
+    }
+    return None;
+  }
+}
+
+impl TexHandleLookup for std::sync::Arc<BinaryTree> {
+  fn is_tex_cached(&self, tex: TexHandle) -> bool {
+    self.rect_for(tex).is_some()
+  }
+
+  fn rect_for(&self, tex: TexHandle) -> Option<(usize, [f32; 4])> {
+    for (ii, t) in self.iter().enumerate() {
+      let res = t.rect_for(tex);
+      if res.is_some() { return Some((ii, res.unwrap())); };
     }
     return None;
   }

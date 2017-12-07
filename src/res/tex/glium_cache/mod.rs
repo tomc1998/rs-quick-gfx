@@ -5,10 +5,13 @@ use glium::texture::{RawImage2d};
 use glium::texture::srgb_texture2d::SrgbTexture2d;
 use res::tex::*;
 use image;
+use std::sync::Arc;
 
 mod binary_tree;
 
-use self::binary_tree::BinaryTreeNode;
+use self::binary_tree::{BinaryTreeNode, BinaryTree};
+
+pub type GliumTexHandleLookup = Arc<BinaryTree>;
 
 /// Texture cache which uses glium as the GPU storage medium.
 pub struct GliumTexCache {
@@ -24,7 +27,7 @@ pub struct GliumTexCache {
   /// This is a list of root nodes for binary trees. They're used to pack
   /// textures into the cache. Each index in this vector matches a cache
   /// texture of the same index.
-  bin_pack_trees: Vec<BinaryTreeNode>,
+  bin_pack_trees: Arc<BinaryTree>,
 
   /// This field holds the value of the next valid TexHandle to hand out.
   next_tex_handle: TexHandle,
@@ -36,9 +39,15 @@ impl GliumTexCache {
       max_cache_textures: 0,
       cache_texture_size: (2048, 2048),
       cache_textures: Vec::new(),
-      bin_pack_trees: Vec::new(),
+      bin_pack_trees: Arc::new(Vec::new()),
       next_tex_handle: TexHandle(0),
     }
+  }
+
+  /// Gets a reference to the internal binary tree for bin packing, which supports texture UV
+  /// lookup whilst also being send and sync.
+  pub fn get_tex_lookup(&self) -> GliumTexHandleLookup {
+      self.bin_pack_trees.clone()
   }
 
   fn get_next_tex_handle(&mut self) -> TexHandle {
@@ -79,7 +88,10 @@ impl GliumTexCache {
       // Loop over all the current textures and try to pack_rect.
       let mut tex_ix = None;
       let mut rect = None;
-      for (ii, t) in self.bin_pack_trees.iter_mut().enumerate() {
+      let bin_pack_trees = Arc::get_mut(&mut self.bin_pack_trees)
+        .expect("Failed to acquire mutable reference when caching texture. Is the texture cache in
+                use?");
+      for (ii, t) in bin_pack_trees.iter_mut().enumerate() {
         let res = t.pack_rect(w as f32 / self.cache_texture_size.0 as f32, 
                               h as f32 / self.cache_texture_size.1 as f32, 
                               tex_handle);
@@ -116,11 +128,11 @@ impl GliumTexCache {
           }
         }
         self.cache_textures.push(tex.unwrap());
-        self.bin_pack_trees.push(BinaryTreeNode::new([0.0, 0.0, 1.0, 1.0]));
+        bin_pack_trees.push(BinaryTreeNode::new([0.0, 0.0, 1.0, 1.0]));
 
         // Pack the rect into this new texture.  No need to error handle this
         // one, too small error handled earlier in this function
-        rect = Some(self.bin_pack_trees.last_mut().unwrap().pack_rect( 
+        rect = Some(bin_pack_trees.last_mut().unwrap().pack_rect( 
             w as f32 / self.cache_texture_size.0 as f32, 
             h as f32 / self.cache_texture_size.1 as f32, 
             tex_handle).unwrap());
@@ -201,18 +213,6 @@ impl TexCache for GliumTexCache {
     unimplemented!();
   }
 
-  fn is_tex_cached(&self, tex: TexHandle) -> bool {
-    self.rect_for(tex).is_some()
-  }
-
-  fn rect_for(&self, tex: TexHandle) -> Option<(usize, [f32; 4])> {
-    for (ii, t) in self.bin_pack_trees.iter().enumerate() {
-      let res = t.rect_for(tex);
-      if res.is_some() { return Some((ii, res.unwrap())); };
-    }
-    return None;
-  }
-
   fn get_tex_with_ix(&self, ix: usize) -> Option<&SrgbTexture2d> {
     if self.cache_textures.len() <= ix { None }
     else { Some(&self.cache_textures[ix]) }
@@ -224,6 +224,20 @@ impl TexCache for GliumTexCache {
 
   fn set_cache_texture_size(&mut self, w: u32, h: u32) {
     self.cache_texture_size = (w, h);
+  }
+}
+
+impl TexHandleLookup for GliumTexCache {
+  fn is_tex_cached(&self, tex: TexHandle) -> bool {
+    self.rect_for(tex).is_some()
+  }
+
+  fn rect_for(&self, tex: TexHandle) -> Option<(usize, [f32; 4])> {
+    for (ii, t) in self.bin_pack_trees.iter().enumerate() {
+      let res = t.rect_for(tex);
+      if res.is_some() { return Some((ii, res.unwrap())); };
+    }
+    return None;
   }
 }
 

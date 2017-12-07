@@ -35,7 +35,7 @@ pub enum CacheTexError {
 }
 
 /// A trait for a GPU texture cache.
-pub trait TexCache {
+pub trait TexCache : TexHandleLookup {
   /// A function to cache some textures and return texture handles.
   /// 
   /// Texture handles are returned in a slice with the indexes corresponding to
@@ -56,19 +56,6 @@ pub trait TexCache {
   /// texture is not cached, it is ignored.
   fn free_tex(&mut self, tex: &[TexHandle]);
 
-  /// Returns true if the given texture handle is cached.
-  fn is_tex_cached(&self, tex: TexHandle) -> bool;
-
-  /// Returns texture coordinate rectangles and texture indexes for the
-  /// location of the given textures in the cache. Similar to the cache_tex
-  /// function, results in the returned vector match the indexes given. 
-  /// 
-  /// To find the texture given by the texture index, use get_tex_with_ix(). 
-  ///
-  /// If the texture is not cached, this function returns None in its place in
-  /// the returned array.
-  fn rect_for(&self, tex: TexHandle) -> Option<(usize, [f32; 4])>;
-
   /// Gets a reference to the cache texture with the given index. If the
   /// texture is not found, returns None.
   fn get_tex_with_ix(&self, ix: usize) -> Option<&SrgbTexture2d>;
@@ -83,4 +70,27 @@ pub trait TexCache {
   /// some GPUs, but smaller sizes will result in more draw calls for
   /// applications with lots of textures.
   fn set_cache_texture_size(&mut self, w: u32, h: u32);
+}
+
+/// A trait which defines behaviour for the looking up of textures given a texture handle. It's
+/// important to separate these functions from TexCache, as it allows for objects which can perform
+/// texture lookups without the need to contain a GL context (which stops the object from being
+/// shared across threads). 
+/// 
+/// Texture caches will all implement this already, but this allows for a more limited
+/// implementation without the ability to buffer extra textures or change anything in the storage.
+pub trait TexHandleLookup {
+  /// Returns true if the given texture handle is cached.
+  fn is_tex_cached(&self, tex: TexHandle) -> bool;
+
+  /// Returns texture coordinate rectangles and texture indexes for the
+  /// location of the given textures in the cache. Similar to the cache_tex
+  /// function, results in the returned vector match the indexes given. 
+  /// 
+  /// To find the texture given by the texture index, use get_tex_with_ix(). 
+  ///
+  /// If the texture is not cached, this function returns None in its place in
+  /// the returned array.
+  fn rect_for(&self, tex: TexHandle) -> Option<(usize, [f32; 4])>;
+
 }

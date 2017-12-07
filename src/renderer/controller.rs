@@ -4,8 +4,8 @@ use std::sync::mpsc;
 use std::sync::{Mutex, Arc};
 use res::font::glium_cache::GliumFontCache;
 use res::font::{FontHandle, FontCache, CacheReadError};
-use res::tex::{TexHandle};
-use res::tex::glium_cache::GliumTexCache;
+use res::tex::{TexHandle, TexHandleLookup};
+use res::tex::glium_cache::GliumTexHandleLookup;
 use vec::Vec2;
 use rusttype::Scale;
 
@@ -43,21 +43,21 @@ impl std::convert::From<CacheReadError> for RenderTextureError {
 /// This struct wraps a Sender<Vec<Vertex>>, and has convenience methods to
 /// draw certain geometry.
 #[derive(Clone)]
-pub struct RendererController<'a> {
+pub struct RendererController<'a, TexLookup: TexHandleLookup + Send + Sync = GliumTexHandleLookup> {
   font_cache: Arc<Mutex<GliumFontCache<'a>>>,
-  tex_cache: Arc<Mutex<GliumTexCache>>,
+  tex_cache: TexLookup,
   white: TexHandle,
   sender: mpsc::Sender<Vec<Vertex>>,
 }
 
-impl<'a> RendererController<'a> {
+impl<'a, TexLookup: TexHandleLookup + Send + Sync> RendererController<'a, TexLookup> {
   /// Creates a new renderer controller with a given mpsc sender. If you want
   /// to get a renderer controller, look at the
   /// renderer::Renderer::get_renderer_controller() function.
   pub fn new(sender: mpsc::Sender<Vec<Vertex>>, 
              font_cache: Arc<Mutex<GliumFontCache<'a>>>,
-             tex_cache: Arc<Mutex<GliumTexCache>>,
-             white: TexHandle) -> Box<RendererController<'a>> {
+             tex_cache: TexLookup,
+             white: TexHandle) -> Box<RendererController<'a, TexLookup>> {
     Box::new(RendererController { 
       sender: sender, 
       font_cache: font_cache, 
@@ -69,9 +69,8 @@ impl<'a> RendererController<'a> {
   /// Lookup a texture handle, and transform the rectangle coordinates into x0,
   /// y0, x1, y1 (as opposed to x,y,w,h).
   fn lookup_tex(&self, tex: TexHandle) -> Option<(usize, [f32; 4])> {
-    use res::tex::TexCache;
     // Get the index of this texture.
-    let ix_rect_opt = { self.tex_cache.lock().unwrap().rect_for(tex) };
+    let ix_rect_opt = { self.tex_cache.rect_for(tex) };
     if ix_rect_opt.is_none() { return None; }
     let (tex_ix, mut rect) = ix_rect_opt.unwrap();
     // Transform from x,y,w,h to x0,y0,x1,y1

@@ -204,7 +204,7 @@ impl<'a> Renderer<'a>{
   pub fn get_renderer_controller(&self, white: TexHandle) -> Box<RendererController<'a>> {
     RendererController::new(self.v_channel_pair.0.clone(), 
                             self.font_cache.clone(), 
-                            self.tex_cache.clone(), white)
+                            self.tex_cache.lock().unwrap().get_tex_lookup(), white)
   }
 
   /// A function to add the given chars to the cache. See res::font::FontCache
