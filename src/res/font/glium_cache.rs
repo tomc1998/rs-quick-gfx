@@ -4,8 +4,17 @@ use std;
 use std::collections::BTreeMap;
 use std::borrow::Cow;
 use std::path::Path;
+use std::sync::Arc;
 
-use res::font::{FontCache, CacheGlyphError, CacheReadError, FontSpec, FontHandle};
+use res::font::{FontCache, GlyphLookup, CacheGlyphError, CacheReadError, FontSpec, FontHandle};
+
+pub struct GliumGlyphLookup<'a> {
+  /// A map of font handles to actual font objects, with an associated x and y
+  /// scale.
+  fonts: BTreeMap<FontHandle, (Font<'a>, (f32, f32))>,
+  /// The cache (not including actual texture storage).
+  cache: rusttype::gpu_cache::Cache,
+}
 
 /// An implementation of a font cache using glium to cache the glyph textures
 /// in vRAM.
@@ -13,14 +22,11 @@ pub struct GliumFontCache<'a> {
   /// A map of font specs to handles. If a font spec is loaded again, it will
   /// be stored under the same font handle as before.
   font_handles: BTreeMap<FontSpec, FontHandle>,
-  /// A map of font handles to actual font objects, with an associated x and y
-  /// scale.
-  fonts: BTreeMap<FontHandle, (Font<'a>, (f32, f32))>,
   /// A counter for the next font handle. This will always store the value of
   /// the next available font handle.
   curr_font_handle: FontHandle,
-  /// The cache (not including actual texture storage).
-  cache: rusttype::gpu_cache::Cache,
+  /// A struct which can be handed out to multiple threads to lookup the UVs of glyphs.
+  glyph_lookup: Arc<GliumGlyphLookup<'a>>,
   /// The texture storage for the font cache.
   cache_tex: glium::texture::srgb_texture2d::SrgbTexture2d,
 }
@@ -39,11 +45,13 @@ impl<'a> GliumFontCache<'a> {
     const CACHE_H : u32 = 4096;
     GliumFontCache {
       font_handles: BTreeMap::new(),
-      fonts: BTreeMap::new(),
       curr_font_handle: FontHandle(0),
       // 2048 * 2048 cache with 0.1 scale tolerance and 1.0 position fault
       // tolerance (we aren't using positioning).
-      cache: rusttype::gpu_cache::Cache::new(CACHE_W, CACHE_H, 0.1, 1.0),
+      glyph_lookup: Arc::new(GliumGlyphLookup {
+        fonts: BTreeMap::new(),
+        cache: rusttype::gpu_cache::Cache::new(CACHE_W, CACHE_H, 0.1, 1.0),
+      }),
       // Create a new glium 2d texture with the cache width and height as the texture size.
       cache_tex: glium::texture::srgb_texture2d::SrgbTexture2d::with_format(
         display,
@@ -58,28 +66,8 @@ impl<'a> GliumFontCache<'a> {
     }
   }
 
-  /// Get a reference to the font (and scale x, y) attached to the given font
-  /// handle.
-  pub fn get_font_ref(&self, fh: FontHandle) -> Option<&(Font, (f32, f32))> { self.fonts.get(&fh) }
-
-  /// A function to get a glyph in the cache, given a font handle and a character.
-  /// # Returns
-  /// * Some(glyph) if the glyph was found.
-  /// * None if the glyph has never been cached.
-  /// # Notes
-  /// This function returning Some is NOT a guarantee that the given glyph is
-  /// currently store in the cache, and requesting a texture rect for the given
-  /// glyph may still not return a value.
-  pub fn get_glyph(&self, fh: FontHandle, c: char) -> Option<PositionedGlyph> {
-    let f_x_y = self.fonts.get(&fh);
-    if f_x_y.is_none() { return None; }
-    let &(ref font, (x_scale, y_scale)) = f_x_y.unwrap();
-    let plain_glyph = font.glyph(c).unwrap();
-    if plain_glyph.id().0 == 0 { return None; }
-    let g = plain_glyph.standalone()
-      .scaled(rusttype::Scale{ x: x_scale, y: y_scale })
-      .positioned(rusttype::Point{x: 0.0, y: 0.0});
-    return Some(g);
+  pub fn get_glyph_lookup(&'a self) -> Arc<GliumGlyphLookup<'a>> {
+      self.glyph_lookup.clone()
   }
 
   /// Gets the next unique, unused font handle
@@ -138,9 +126,13 @@ impl<'a> FontCache for GliumFontCache<'a> {
       }
     }
 
+    let glyph_lookup = Arc::get_mut(&mut self.glyph_lookup)
+    .expect("Failed to acquire mutable reference when caching glyphs. Is the font cache in
+            use?");
+
     // Clear the queue to make sure we don't cache glyphs we didn't explicitly
     // ask for in this function.
-    self.cache.clear_queue();
+    glyph_lookup.cache.clear_queue();
 
     // Now run through the no_dup vec and try to call rect_for on the cache. If
     // an error is returned (for no rect found) then we can queue this glyph.
@@ -157,7 +149,7 @@ impl<'a> FontCache for GliumFontCache<'a> {
         .positioned(rusttype::Point{x: 0.0, y: 0.0});
 
       // Look up the rect in the cache
-      let res = self.cache.rect_for(fh.0, &g);
+      let res = glyph_lookup.cache.rect_for(fh.0, &g);
       let mut cached = true;
       match res {
         Err(rusttype::gpu_cache::CacheReadErr::GlyphNotCached) => cached = false,
@@ -165,17 +157,17 @@ impl<'a> FontCache for GliumFontCache<'a> {
       }
       // If the glyph isn't cached, then queue the glyph
       if !cached {
-        self.cache.queue_glyph(fh.0, g.clone());
+        glyph_lookup.cache.queue_glyph(fh.0, g.clone());
       }
     }
     if glyphs_not_found.len() != 0 {
-      self.cache.clear_queue();
+      glyph_lookup.cache.clear_queue();
       return Err(CacheGlyphError::GlyphNotSupported(glyphs_not_found));
     }
 
     let cache_tex = &mut self.cache_tex;
     // Cache the whole queue of glyphs
-    try!(self.cache.cache_queued(move |rect, data| {
+    try!(glyph_lookup.cache.cache_queued(move |rect, data| {
       cache_tex.main_level().write(glium::Rect {
         left: rect.min.x,
         bottom: rect.min.y,
@@ -189,12 +181,30 @@ impl<'a> FontCache for GliumFontCache<'a> {
       });
     }).map_err(|_| CacheGlyphError::CacheTooSmall));
 
-    if !self.fonts.contains_key(&fh) {
-      self.fonts.insert(fh, (font, (scale, scale)));
+    if !glyph_lookup.fonts.contains_key(&fh) {
+      glyph_lookup.fonts.insert(fh, (font, (scale, scale)));
     }
 
     return Ok(fh);
   }
+}
+
+impl<'a> GlyphLookup for GliumFontCache<'a> {
+  fn rect_for(&self, font_handle: FontHandle, 
+              code_point: char) -> Result<Option<[f32; 4]>, CacheReadError> {
+    self.glyph_lookup.rect_for(font_handle, code_point)
+  }
+
+  fn get_font_ref(&self, fh: FontHandle) -> Option<&(Font, (f32, f32))> { 
+      self.glyph_lookup.fonts.get(&fh) 
+  }
+
+  fn get_glyph(&self, fh: FontHandle, c: char) -> Option<PositionedGlyph> {
+      self.glyph_lookup.get_glyph(fh, c)
+  }
+}
+
+impl<'a> GlyphLookup for Arc<GliumGlyphLookup<'a>> {
   fn rect_for(&self, font_handle: FontHandle, 
               code_point: char) -> Result<Option<[f32; 4]>, CacheReadError> {
     let g = self.get_glyph(font_handle, code_point); // Get the glyph
@@ -207,5 +217,21 @@ impl<'a> FontCache for GliumFontCache<'a> {
     // UV rect and glyph screen pos rect
     let (uv_rect, _) = rect_opt.unwrap();
     Ok(Some([uv_rect.min.x, uv_rect.min.y, uv_rect.max.x, uv_rect.max.y]))
+  }
+
+  fn get_font_ref(&self, fh: FontHandle) -> Option<&(Font, (f32, f32))> { 
+      self.fonts.get(&fh) 
+  }
+
+  fn get_glyph(&self, fh: FontHandle, c: char) -> Option<PositionedGlyph> {
+    let f_x_y = self.fonts.get(&fh);
+    if f_x_y.is_none() { return None; }
+    let &(ref font, (x_scale, y_scale)) = f_x_y.unwrap();
+    let plain_glyph = font.glyph(c).unwrap();
+    if plain_glyph.id().0 == 0 { return None; }
+    let g = plain_glyph.standalone()
+      .scaled(rusttype::Scale{ x: x_scale, y: y_scale })
+      .positioned(rusttype::Point{x: 0.0, y: 0.0});
+    return Some(g);
   }
 }

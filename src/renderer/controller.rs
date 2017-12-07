@@ -1,13 +1,14 @@
 use renderer::{Vertex, TexType};
 use std;
 use std::sync::mpsc;
-use std::sync::{Mutex, Arc};
-use res::font::glium_cache::GliumFontCache;
-use res::font::{FontHandle, FontCache, CacheReadError};
+use std::sync::Arc;
+use res::font::glium_cache::GliumGlyphLookup;
+use res::font::{self, FontHandle, CacheReadError};
 use res::tex::{TexHandle, TexHandleLookup};
 use res::tex::glium_cache::GliumTexHandleLookup;
 use vec::Vec2;
 use rusttype::Scale;
+use std::marker::PhantomData;
 
 #[derive(Copy, Clone, Hash, Debug)]
 pub struct RenderTextError;
@@ -43,26 +44,32 @@ impl std::convert::From<CacheReadError> for RenderTextureError {
 /// This struct wraps a Sender<Vec<Vertex>>, and has convenience methods to
 /// draw certain geometry.
 #[derive(Clone)]
-pub struct RendererController<'a, TexLookup: TexHandleLookup + Send + Sync = GliumTexHandleLookup> {
-  font_cache: Arc<Mutex<GliumFontCache<'a>>>,
+pub struct RendererController<'a,
+    GlyphLookup: 'a + font::GlyphLookup + Send + Sync = Arc<GliumGlyphLookup<'a>>,
+    TexLookup: TexHandleLookup + Send + Sync = GliumTexHandleLookup,
+    > {
+  font_cache: GlyphLookup,
   tex_cache: TexLookup,
   white: TexHandle,
   sender: mpsc::Sender<Vec<Vertex>>,
+  phantom: PhantomData<&'a GlyphLookup>,
 }
 
-impl<'a, TexLookup: TexHandleLookup + Send + Sync> RendererController<'a, TexLookup> {
+impl<'a, GlyphLookup: font::GlyphLookup + Send + Sync, 
+    TexLookup: TexHandleLookup + Send + Sync> RendererController<'a, GlyphLookup, TexLookup> {
   /// Creates a new renderer controller with a given mpsc sender. If you want
   /// to get a renderer controller, look at the
   /// renderer::Renderer::get_renderer_controller() function.
   pub fn new(sender: mpsc::Sender<Vec<Vertex>>, 
-             font_cache: Arc<Mutex<GliumFontCache<'a>>>,
+             font_cache: GlyphLookup,
              tex_cache: TexLookup,
-             white: TexHandle) -> Box<RendererController<'a, TexLookup>> {
+             white: TexHandle) -> Box<RendererController<'a, GlyphLookup, TexLookup>> {
     Box::new(RendererController { 
       sender: sender, 
       font_cache: font_cache, 
       tex_cache: tex_cache,
       white: white,
+      phantom: PhantomData,
     })
   }
 
@@ -301,7 +308,7 @@ impl<'a, TexLookup: TexHandleLookup + Send + Sync> RendererController<'a, TexLoo
   /// use the cache_glyphs method on your QGFX instance.
   pub fn text(&self, text: &str, pos: &[f32; 2], 
               font_handle: FontHandle, tint: &[f32; 4]) -> Result<(), RenderTextError> {
-    let font_cache = self.font_cache.lock().unwrap();
+    let font_cache = &self.font_cache;
     let &(ref font, (scale, _)) = font_cache.get_font_ref(font_handle).unwrap();
     let mut vertices = Vec::with_capacity(text.len() * 6);
     let mut cursor = pos.clone();

@@ -5,7 +5,6 @@ use std::cmp::min;
 fn main() {
   // Create the renderer and get a controller
   let mut qgfx = quick_gfx::QGFX::new();
-  let controller = qgfx.get_renderer_controller();
 
   // Get display size
   let (mut win_w, mut win_h) = qgfx.get_display_size();
@@ -66,7 +65,10 @@ fn main() {
     }
 
     // Render the circle
-    controller.circle(&ball_pos, ball_rad, 32, &[1.0, 0.0, 1.0, 1.0]);
+    {
+        let controller = qgfx.get_renderer_controller();
+        controller.circle(&ball_pos, ball_rad, 32, &[1.0, 0.0, 1.0, 1.0]);
+    }
     qgfx.recv_data();
     qgfx.render();
   }

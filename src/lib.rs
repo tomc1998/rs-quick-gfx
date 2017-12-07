@@ -37,7 +37,7 @@ impl<'a> QGFX<'a> {
   /// Create a display with a renderer and return it. This function will open a window.
   pub fn new() -> QGFX<'a> {
     let (display, events_loop) = init_display();
-    let renderer = Renderer::new(&display);
+    let mut renderer = Renderer::new(&display);
 
     // We need to buffer a small white rectangle, for when drawing coloured
     // shapes. The following is an array for a bitmap with a 1x1 white pixel.
@@ -64,13 +64,13 @@ impl<'a> QGFX<'a> {
 
   /// Get a renderer controller to send VBO data to this renderer. These can be
   /// cloned.
-  pub fn get_renderer_controller(&self) -> Box<RendererController<'a>> {
+  pub fn get_renderer_controller(&'a self) -> Box<RendererController<'a>> {
     return self.renderer.get_renderer_controller(self.white_tex_handle);
   }
 
   /// Cache some glyphs from a font.
   pub fn cache_glyphs<F: AsRef<Path>> (
-    &self, file: F, scale: f32, 
+    &mut self, file: F, scale: f32, 
     charset: &[char]) -> Result<FontHandle, CacheGlyphError> {
     self.renderer.cache_glyphs(file, scale, charset)
   }
@@ -90,11 +90,11 @@ impl<'a> QGFX<'a> {
   /// Each texture may cause an error separately. Errors may occur if a texture
   /// is too big for the texture cache, or if there was an error loading the
   /// image etc.
-  pub fn cache_tex<F: AsRef<Path>>(&self, filepaths: &[F]) -> Vec<Result<TexHandle, CacheTexError>> {
+  pub fn cache_tex<F: AsRef<Path>>(&mut self, filepaths: &[F]) -> Vec<Result<TexHandle, CacheTexError>> {
     self.renderer.cache_tex(&self.display, filepaths)
   }
 
-  pub fn cache_tex_from_bytes(&self, bytes: &[&[u8]]) -> Vec<Result<TexHandle, CacheTexError>> {
+  pub fn cache_tex_from_bytes(&mut self, bytes: &[&[u8]]) -> Vec<Result<TexHandle, CacheTexError>> {
     self.renderer.cache_tex_from_bytes(&self.display, bytes)
   }
 

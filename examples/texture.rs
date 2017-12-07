@@ -11,11 +11,13 @@ fn main() {
   }
   let tex_handle = tex_handle.as_ref().unwrap().clone();
 
-  // Get a controller, and draw the texture
-  let controller = g.get_renderer_controller();
+  {
+    // Get a controller, and draw the texture
+    let controller = g.get_renderer_controller();
 
-  // Draw a green rectangle at (0, 0) with dimensions (100, 100).
-  controller.tex(tex_handle, &[0.0, 0.0, 512.0, 512.0], &[1.0, 1.0, 1.0, 1.0]).unwrap();
+    // Draw a green rectangle at (0, 0) with dimensions (100, 100).
+    controller.tex(tex_handle, &[0.0, 0.0, 512.0, 512.0], &[1.0, 1.0, 1.0, 1.0]).unwrap();
+  }
 
   // Once we've send the data, we need to have the renderer receive it.
   g.recv_data();

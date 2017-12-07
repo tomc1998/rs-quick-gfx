@@ -8,7 +8,6 @@ pub use self::controller::RendererController;
 
 use std::path::Path;
 use std::sync::mpsc;
-use std::sync::{Mutex, Arc};
 use glium::{self, VertexBuffer};
 use res::font::glium_cache::GliumFontCache;
 use res::font::{CacheGlyphError, FontHandle};
@@ -68,8 +67,8 @@ pub struct Renderer<'a> {
   /// The projection matrix used to render the game. 
   proj_mat: [[f32; 4]; 4],
 
-  font_cache: Arc<Mutex<GliumFontCache<'a>>>,
-  tex_cache: Arc<Mutex<GliumTexCache>>,
+  font_cache: GliumFontCache<'a>,
+  tex_cache: GliumTexCache,
 }
 
 impl<'a> Renderer<'a>{
@@ -86,8 +85,8 @@ impl<'a> Renderer<'a>{
       program: shader::get_program(display),
       v_data_list: Vec::new(),
       v_channel_pair: mpsc::channel(),
-      font_cache: Arc::new(Mutex::new(font_cache)),
-      tex_cache: Arc::new(Mutex::new(GliumTexCache::new())),
+      font_cache: font_cache,
+      tex_cache: GliumTexCache::new(),
       proj_mat: [[2.0/w as f32, 0.0,           0.0, -0.0],
                  [0.0,         -2.0/h as f32,  0.0,  0.0],
                  [0.0,          0.0,          -1.0,  0.0],
@@ -161,8 +160,8 @@ impl<'a> Renderer<'a>{
       self.vbo.write(list);
 
       // Get the texture
-      let font_cache = self.font_cache.lock().unwrap();
-      let tex_cache = self.tex_cache.lock().unwrap();
+      let font_cache = &self.font_cache;
+      let tex_cache = &self.tex_cache;
       let tex;
       match tex_type {
         TexType::Texture => {
@@ -201,36 +200,36 @@ impl<'a> Renderer<'a>{
   /// # Returns
   /// A Sender<Vertex> for sending vertex data to the renderer. When
   /// render() is called, this data will be rendered then cleared.
-  pub fn get_renderer_controller(&self, white: TexHandle) -> Box<RendererController<'a>> {
+  pub fn get_renderer_controller(&'a self, white: TexHandle) -> Box<RendererController<'a>> {
     RendererController::new(self.v_channel_pair.0.clone(), 
-                            self.font_cache.clone(), 
-                            self.tex_cache.lock().unwrap().get_tex_lookup(), white)
+                            self.font_cache.get_glyph_lookup(),
+                            self.tex_cache.get_tex_lookup(), white)
   }
 
   /// A function to add the given chars to the cache. See res::font::FontCache
   /// for more details. This wraps the font_cache stored inside the renderer.
   /// This locks the mutex on the font cache, so any font rendering or caching
   /// on other threads will also be blocked for the duration.
-  pub fn cache_glyphs<F: AsRef<Path>>(&self, file: F, scale: f32, 
+  pub fn cache_glyphs<F: AsRef<Path>>(&mut self, file: F, scale: f32, 
                                       charset: &[char]) -> Result<FontHandle, CacheGlyphError> {
     use res::font::FontCache;
-    self.font_cache.lock().unwrap().cache_glyphs(file, scale, charset)
+    self.font_cache.cache_glyphs(file, scale, charset)
   }
 
   /// Cache textures from filepaths, returning a list of texture handles.
   pub fn cache_tex<F: AsRef<Path>>(
-    &self, display: &glium::Display, 
+    &mut self, display: &glium::Display, 
     filepaths: &[F]) -> Vec<Result<TexHandle, CacheTexError>> {
     use res::tex::TexCache;
-    self.tex_cache.lock().unwrap().cache_tex(display, filepaths)
+    self.tex_cache.cache_tex(display, filepaths)
   }
 
   /// Cache textures from bytes, returning a list of texture handles.
   pub fn cache_tex_from_bytes(
-    &self, display: &glium::Display, 
+    &mut self, display: &glium::Display, 
     bytes: &[&[u8]]) -> Vec<Result<TexHandle, CacheTexError>> {
     use res::tex::TexCache;
-    self.tex_cache.lock().unwrap().cache_tex_from_bytes(display, bytes)
+    self.tex_cache.cache_tex_from_bytes(display, bytes)
   }
 }
 

@@ -4,6 +4,7 @@ use std::ops::Deref;
 use std::path::{PathBuf, Path};
 use std::collections::HashSet;
 use std::fmt::{Display, Formatter, self};
+use rusttype::{PositionedGlyph, Font};
 
 pub mod glium_cache;
 
@@ -114,7 +115,7 @@ pub fn gen_charset(sets: &HashSet<Charset>) -> Vec<char> {
 
 /// A trait for a GPU font cache. Glyphs are loaded into the font cache,
 /// which are stored on the GPU for fast access when rendering text.
-pub trait FontCache { 
+pub trait FontCache : GlyphLookup { 
   /// A function to add the given chars to the cache. Duplicate chars will be
   /// ignored. Repeated calls to this function with the same file path and
   /// scale will be taken into account, and not re-cached.
@@ -128,7 +129,12 @@ pub trait FontCache {
   /// Will return a CacheGlyph error if this function failed to add the glyphs to the cache.
   fn cache_glyphs<F: AsRef<Path>>(&mut self, file: F, scale: f32, charset: &[char]) 
     -> Result<FontHandle, CacheGlyphError>;
+}
 
+/// A trait which has methods for looking up UVs for a glyph given a font handle and a code point.
+/// This is separate to FontCache to allow for more specialised objects to be used for lookup that
+/// don't contain a GL context (allowing for send + sync).
+pub trait GlyphLookup {
   /// A function to look up the texture coordinates of a given glyph.
   /// # Params
   /// * `font_handle` - The handle of the font this glyph was cached into with.
@@ -141,6 +147,20 @@ pub trait FontCache {
   /// Will return a CacheReadError if the glyph was not cached.
   fn rect_for(&self, font_handle: FontHandle, code_point: char) 
     -> Result<Option<[f32; 4]>, CacheReadError>;
+
+  /// Get a reference to the font (and scale x, y) attached to the given font
+  /// handle.
+  fn get_font_ref(&self, fh: FontHandle) -> Option<&(Font, (f32, f32))>;
+
+  /// A function to get a glyph in the cache, given a font handle and a character.
+  /// # Returns
+  /// * Some(glyph) if the glyph was found.
+  /// * None if the glyph has never been cached.
+  /// # Notes
+  /// This function returning Some is NOT a guarantee that the given glyph is
+  /// currently store in the cache, and requesting a texture rect for the given
+  /// glyph may still not return a value.
+  fn get_glyph(&self, fh: FontHandle, c: char) -> Option<PositionedGlyph>;
 }
 
 
