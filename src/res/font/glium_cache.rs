@@ -40,7 +40,7 @@ impl<'a> std::fmt::Debug for GliumFontCache<'a> {
 }
 
 impl<'a> GliumFontCache<'a> {
-  pub fn new(display: &glium::Display) -> GliumFontCache<'a> {
+  pub fn new<F: glium::backend::Facade>(display: &F) -> GliumFontCache<'a> {
     const CACHE_W : u32 = 4096;
     const CACHE_H : u32 = 4096;
     GliumFontCache {

@@ -8,7 +8,7 @@ use glium::texture::srgb_texture2d::SrgbTexture2d;
 
 /// A texture handle. This references a texture loaded into the cache.
 #[derive(PartialOrd, Ord, PartialEq, Eq, Copy, Clone)]
-pub struct TexHandle(usize);
+pub struct TexHandle(pub usize);
 
 /// An error returned when caching a texture.
 #[derive(Debug)]

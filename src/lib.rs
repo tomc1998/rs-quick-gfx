@@ -1,3 +1,9 @@
+
+// Setup benching (as long as bench feature enabled)
+#![cfg_attr(feature = "bench", feature(test))]
+#[cfg(feature = "bench")]
+extern crate test;
+
 #[macro_use]
 extern crate glium;
 extern crate winit;
@@ -7,6 +13,7 @@ extern crate image;
 mod renderer;
 mod vec;
 mod res;
+mod test_helper;
 
 pub use renderer::RendererController;
 pub use glium::glutin::Event;

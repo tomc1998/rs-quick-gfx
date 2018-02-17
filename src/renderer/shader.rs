@@ -1,20 +1,18 @@
 use glium;
 
 /// Convenience method to compile the shader program used by the renderer.
-pub fn get_program(display: &glium::Display) -> glium::Program {
-  let v_shader = r#"
-    #version 130
-
-    precision highp float;
+pub fn get_program<F: glium::backend::Facade>(display: &F) -> glium::Program {
+    let v_shader = r#"
+    #version 120
 
     uniform mat4 proj_mat;
 
-    in vec2 pos;
-    in vec2 tex_coords;
-    in vec4 col; 
+    attribute vec2 pos;
+    attribute vec2 tex_coords;
+    attribute vec4 col; 
 
-    out vec2 v_tex_coords;
-    out vec4 v_col;
+    varying vec2 v_tex_coords;
+    varying vec4 v_col;
 
     void main() {
       v_col = col;
@@ -23,8 +21,8 @@ pub fn get_program(display: &glium::Display) -> glium::Program {
     }
   "#;
 
-  let f_shader = r#"
-    #version 130
+    let f_shader = r#"
+    #version 120
 
     uniform sampler2D tex;
 
@@ -32,23 +30,21 @@ pub fn get_program(display: &glium::Display) -> glium::Program {
     // Otherwise, we care about the colour. Will be 1 if we're rendering a font.
     uniform int is_font;
 
-    in vec4 v_col;
-    in vec2 v_tex_coords;
-
-    out vec4 color;
+    varying vec4 v_col;
+    varying vec2 v_tex_coords;
 
     void main() {
       if (is_font > 0) {
-        color = vec4(v_col.rgb, texture(tex, v_tex_coords).r);
+        gl_FragColor = vec4(v_col.rgb, texture2D(tex, v_tex_coords).r);
       }
       else {
-        vec4 pixel = texture(tex, v_tex_coords);
-        color = vec4(pixel.r * v_col.r, 
+        vec4 pixel = texture2D(tex, v_tex_coords);
+        gl_FragColor = vec4(pixel.r * v_col.r, 
                      pixel.g * v_col.g, 
                      pixel.b * v_col.b, 
                      pixel.a * v_col.a);
       }
     }
   "#;
-  glium::Program::from_source(display, v_shader, f_shader, None).unwrap()
+    glium::Program::from_source(display, v_shader, f_shader, None).unwrap()
 }
