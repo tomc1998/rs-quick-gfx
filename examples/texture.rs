@@ -13,10 +13,11 @@ fn main() {
 
   {
     // Get a controller, and draw the texture
-    let controller = g.get_renderer_controller();
+    let mut controller = g.get_renderer_controller();
 
     // Draw a green rectangle at (0, 0) with dimensions (100, 100).
     controller.tex(tex_handle, &[0.0, 0.0, 512.0, 512.0], &[1.0, 1.0, 1.0, 1.0]).unwrap();
+    controller.flush();
   }
 
   // Once we've send the data, we need to have the renderer receive it.

@@ -66,8 +66,9 @@ fn main() {
 
     // Render the circle
     {
-        let controller = qgfx.get_renderer_controller();
+        let mut controller = qgfx.get_renderer_controller();
         controller.circle(&ball_pos, ball_rad, 32, &[1.0, 0.0, 1.0, 1.0]);
+        controller.flush();
     }
     qgfx.recv_data();
     qgfx.render();
