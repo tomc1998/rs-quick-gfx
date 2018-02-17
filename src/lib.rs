@@ -72,7 +72,13 @@ impl<'a> QGFX<'a> {
   pub fn cache_glyphs<F: AsRef<Path>> (
     &mut self, file: F, scale: f32, 
     charset: &[char]) -> Result<FontHandle, CacheGlyphError> {
-    self.renderer.cache_glyphs(file, scale, charset)
+    // Need to add the '?' char, which is out fallback for unknown glyphs. Pretty slow but who
+    // cares - we only call it once at the start.
+    let mut charset : Vec<char> = charset.to_owned();
+    if !charset.contains(&'?') {
+        charset.push('?');
+    }
+    self.renderer.cache_glyphs(file, scale, &charset)
   }
 
   /// A function to cache some textures and return texture handles.
