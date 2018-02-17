@@ -391,6 +391,7 @@ impl<'a, GlyphLookup: font::GlyphLookup + Send + Sync, TexLookup: TexHandleLooku
             if rect.is_none() {
                 cursor[0] += h_metrics.left_side_bearing;
                 cursor[0] += h_metrics.advance_width;
+                bb_x += h_metrics.left_side_bearing + h_metrics.advance_width;
                 continue;
             }
             let rect = rect.unwrap();
