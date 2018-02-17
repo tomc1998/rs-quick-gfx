@@ -10,25 +10,6 @@ use rusttype::Scale;
 use std::marker::PhantomData;
 
 #[derive(Copy, Clone, Hash, Debug)]
-pub struct RenderTextError;
-impl std::fmt::Display for RenderTextError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-        use std::error::Error;
-        write!(f, "{}", self.description())
-    }
-}
-impl std::error::Error for RenderTextError {
-    fn description(&self) -> &'static str {
-        "Text rendering failed - not all glyphs were cached."
-    }
-}
-impl std::convert::From<CacheReadError> for RenderTextError {
-    fn from(_: CacheReadError) -> Self {
-        RenderTextError
-    }
-}
-
-#[derive(Copy, Clone, Hash, Debug)]
 pub struct RenderTextureError;
 impl std::fmt::Display for RenderTextureError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
