@@ -40,16 +40,16 @@ pub trait TexCache : TexHandleLookup {
   /// 
   /// Texture handles are returned in a slice with the indexes corresponding to
   /// the indexes in the slice of texture files given.
-  fn cache_tex<F: AsRef<Path>>(
-    &mut self, display: &glium::Display, 
+  fn cache_tex<F: AsRef<Path>, Facade: glium::backend::Facade>(
+    &mut self, display: &Facade, 
     filepaths: &[F]) -> Vec<Result<TexHandle, CacheTexError>>;
 
   /// A function to cache some textures and return texture handles.
   /// 
   /// Texture handles are returned in a slice with the indexes corresponding to
   /// the indexes in the slice of texture files given.
-  fn cache_tex_from_bytes(
-    &mut self, display: &glium::Display, 
+  fn cache_tex_from_bytes<F: glium::backend::Facade>(
+    &mut self, display: &F, 
     bytes: &[&[u8]]) -> Vec<Result<TexHandle, CacheTexError>>;
 
   /// A function to free a given list of texture from the cache. If a

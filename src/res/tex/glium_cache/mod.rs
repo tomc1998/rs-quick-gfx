@@ -58,8 +58,8 @@ impl GliumTexCache {
 
   /// The method to actually internally cache textures. Called by both of the
   /// caching methods implemented when implementing the TexCache trait.
-  fn cache_tex_internal(
-    &mut self, display: &glium::Display, 
+  fn cache_tex_internal<F: glium::backend::Facade>(
+    &mut self, display: &F, 
     bytes: Vec<Result<&[u8], CacheTexError>>) -> Vec<Result<TexHandle, CacheTexError>> {
     let mut result = Vec::with_capacity(bytes.len());
     for buf in bytes {
@@ -157,8 +157,8 @@ impl GliumTexCache {
 }
 
 impl TexCache for GliumTexCache {
-  fn cache_tex<F: AsRef<Path>>(
-    &mut self, display: &glium::Display, 
+  fn cache_tex<F: AsRef<Path>, Facade: glium::backend::Facade>(
+    &mut self, display: &Facade, 
     filepaths: &[F]) -> Vec<Result<TexHandle, CacheTexError>> {
     use std::fs::File;
     use std::io::Read;
@@ -200,8 +200,8 @@ impl TexCache for GliumTexCache {
   /// This must be called on the main thread, with the GL context as it may
   /// create textures (this is enforced by the need to pass in the
   /// glium::Display).
-  fn cache_tex_from_bytes(
-    &mut self, display: &glium::Display, 
+  fn cache_tex_from_bytes<F: glium::backend::Facade>(
+    &mut self, display: &F, 
     bytes: &[&[u8]]) -> Vec<Result<TexHandle, CacheTexError>> {
     let vec : Vec<Result<&[u8], CacheTexError>> 
       = bytes.iter().map(|buf| Ok(*buf)).collect();

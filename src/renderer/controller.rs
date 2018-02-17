@@ -41,6 +41,8 @@ pub struct RendererController<
     tex_cache: TexLookup,
     white: TexHandle,
     sender: mpsc::Sender<Vec<Vertex>>,
+    /// A buffer for vertices. When flush() is called, these will be sent with sender.
+    buffer: Vec<Vertex>,
     phantom: PhantomData<&'a GlyphLookup>,
 }
 
@@ -57,11 +59,20 @@ impl<'a, GlyphLookup: font::GlyphLookup + Send + Sync, TexLookup: TexHandleLooku
     ) -> Box<RendererController<'a, GlyphLookup, TexLookup>> {
         Box::new(RendererController {
             sender: sender,
+            buffer: Vec::new(),
             font_cache: font_cache,
             tex_cache: tex_cache,
             white: white,
             phantom: PhantomData,
         })
+    }
+
+    /// Flush this controller & send to renderer
+    pub fn flush(&mut self) {
+        use std::mem::replace;
+        let empty = Vec::new();
+        let v_data = replace(&mut self.buffer, empty);
+        self.sender.send(v_data).unwrap();
     }
 
     /// Lookup a texture handle, and transform the rectangle coordinates into x0,
@@ -87,7 +98,7 @@ impl<'a, GlyphLookup: font::GlyphLookup + Send + Sync, TexLookup: TexHandleLooku
     /// * `p2` - The ending point
     /// * `w` - The line width
     /// * `col` - The colour of the line
-    pub fn line(&self, p1: [f32; 2], p2: [f32; 2], w: f32, col: [f32; 4]) {
+    pub fn line(&mut self, p1: [f32; 2], p2: [f32; 2], w: f32, col: [f32; 4]) {
         let mut data = Vec::with_capacity(6);
         let p1 = Vec2(p1);
         let p2 = Vec2(p2);
@@ -148,14 +159,14 @@ impl<'a, GlyphLookup: font::GlyphLookup + Send + Sync, TexLookup: TexHandleLooku
         });
 
         // Send the vertex data through the sender
-        self.sender.send(data).unwrap();
+        self.buffer.append(&mut data);
     }
 
     /// Draws a line given a start and an endpoint.
     /// #Params
     /// * `aabb` - The AABB box for the rectangle - X, Y, W, H
     /// * `col` - The colour of the rectangle
-    pub fn rect(&self, aabb: &[f32; 4], col: &[f32; 4]) {
+    pub fn rect(&mut self, aabb: &[f32; 4], col: &[f32; 4]) {
         let mut data = Vec::with_capacity(6);
 
         // Lookup white texture
@@ -211,7 +222,7 @@ impl<'a, GlyphLookup: font::GlyphLookup + Send + Sync, TexLookup: TexHandleLooku
         });
 
         // Send the data
-        self.sender.send(data).unwrap();
+        self.buffer.append(&mut data);
     }
 
     /// Draws a circle.
@@ -220,7 +231,7 @@ impl<'a, GlyphLookup: font::GlyphLookup + Send + Sync, TexLookup: TexHandleLooku
     /// * `rad` The radius of the circle
     /// * `segments` The number of triangle segments to use when drawing. More = smoother circle.
     /// * `col` - The colour of the circle.
-    pub fn circle(&self, pos: &[f32; 2], rad: f32, segments: usize, col: &[f32; 4]) {
+    pub fn circle(&mut self, pos: &[f32; 2], rad: f32, segments: usize, col: &[f32; 4]) {
         use std::f64::consts::PI;
 
         // Lookup white texture
@@ -268,7 +279,7 @@ impl<'a, GlyphLookup: font::GlyphLookup + Send + Sync, TexLookup: TexHandleLooku
         }
 
         // Send the data
-        self.sender.send(data).unwrap();
+        self.buffer.append(&mut data);
     }
 
     /// Render a texture.
@@ -277,7 +288,7 @@ impl<'a, GlyphLookup: font::GlyphLookup + Send + Sync, TexLookup: TexHandleLooku
     /// * `aabb` - The AABB bounding box of the final texture - X, Y, W, H.
     /// * `tint` - The colour to tint the texture.
     pub fn tex(
-        &self,
+        &mut self,
         tex: TexHandle,
         aabb: &[f32; 4],
         tint: &[f32; 4],
@@ -330,7 +341,7 @@ impl<'a, GlyphLookup: font::GlyphLookup + Send + Sync, TexLookup: TexHandleLooku
             tex_coords: [rect[2], rect[1]],
         });
 
-        self.sender.send(vertices).unwrap();
+        self.buffer.append(&mut vertices);
         return Ok(());
     }
 
@@ -345,7 +356,7 @@ impl<'a, GlyphLookup: font::GlyphLookup + Send + Sync, TexLookup: TexHandleLooku
     /// Error if not all the glyphs for this font were cached. To cache glyphs,
     /// use the cache_glyphs method on your QGFX instance.
     pub fn text(
-        &self,
+        &mut self,
         text: &str,
         pos: &[f32; 2],
         font_handle: FontHandle,
@@ -452,7 +463,7 @@ impl<'a, GlyphLookup: font::GlyphLookup + Send + Sync, TexLookup: TexHandleLooku
             bb_x += h_metrics.advance_width;
         }
 
-        self.sender.send(vertices).unwrap();
+        self.buffer.append(&mut vertices);
         return (bb_x, bb_y);
     }
 }

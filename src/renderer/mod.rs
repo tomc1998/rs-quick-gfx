@@ -240,9 +240,9 @@ impl<'a> Renderer<'a> {
     }
 
     /// Cache textures from filepaths, returning a list of texture handles.
-    pub fn cache_tex<F: AsRef<Path>>(
+    pub fn cache_tex<Facade: glium::backend::Facade, F: AsRef<Path>>(
         &mut self,
-        display: &glium::Display,
+        display: &Facade,
         filepaths: &[F],
     ) -> Vec<Result<TexHandle, CacheTexError>> {
         use res::tex::TexCache;
@@ -250,9 +250,9 @@ impl<'a> Renderer<'a> {
     }
 
     /// Cache textures from bytes, returning a list of texture handles.
-    pub fn cache_tex_from_bytes(
+    pub fn cache_tex_from_bytes<F: glium::backend::Facade>(
         &mut self,
-        display: &glium::Display,
+        display: &F,
         bytes: &[&[u8]],
     ) -> Vec<Result<TexHandle, CacheTexError>> {
         use res::tex::TexCache;
@@ -266,49 +266,51 @@ mod tests {
     use test_helper::create_headless_display;
     use super::*;
 
+    fn get_white<F: glium::backend::Facade>(r: &mut Renderer, display: F) -> TexHandle {
+        // We need to buffer a small white rectangle, for when drawing coloured
+        // shapes. The following is an array for a bitmap with a 1x1 white pixel.
+        let bytes = [0x42, 0x4d, 0x42, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x3e, 0x00, 0x00, 0x00, 0x28, 0x00, 0x00, 0x00, 0x01, 0x00,
+                    0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff,
+                    0xff, 0x00, 0x80, 0x00, 0x00, 0x00];
+        let t_vec_ref = &r.cache_tex_from_bytes(&display, &[&bytes[..]])[0];
+        if t_vec_ref.is_err() {
+            println!("{:?}", t_vec_ref.as_ref().err().unwrap());
+        }
+        return t_vec_ref.as_ref().unwrap().clone();
+    }
+
+    #[bench]
+    fn rect_bench(b: &mut Bencher) {
+        let display = create_headless_display();
+        let mut r = Renderer::new(&display);
+
+        let white = get_white(&mut r, display);
+
+        let mut g = r.get_renderer_controller(white);
+
+        b.iter(|| {
+            g.rect(&[0.0, 0.0, 0.0, 0.0], &[0.0, 0.0, 0.0, 0.0]);
+        });
+    }
+
     #[bench]
     fn recv_data_bench(b: &mut Bencher) {
         let display = create_headless_display();
-        let mut g = Renderer::new(&display);
-        const COL : [f32; 4] = [0.0, 0.0, 0.0, 0.0];
+        let mut r = Renderer::new(&display);
+        let white = get_white(&mut r, display);
 
         b.iter(|| {
             {
-                for _ in 0..1000 {
-                    g.v_channel_pair.0.send(vec![
-                        Vertex {
-                            pos: [0.0, 0.0],
-                            col: COL.clone(),
-                            tex_type: TexType::Texture,
-                            tex_ix: 0,
-                            tex_coords: [0.0, 0.0],
-                        },
-                        Vertex {
-                            pos: [0.0, 0.0],
-                            col: COL.clone(),
-                            tex_type: TexType::Texture,
-                            tex_ix: 0,
-                            tex_coords: [0.0, 0.0],
-                        },
-                        Vertex {
-                            pos: [0.0, 0.0],
-                            col: COL.clone(),
-                            tex_type: TexType::Texture,
-                            tex_ix: 0,
-                            tex_coords: [0.0, 0.0],
-                        },
-                        Vertex {
-                            pos: [0.0, 0.0],
-                            col: COL.clone(),
-                            tex_type: TexType::Texture,
-                            tex_ix: 0,
-                            tex_coords: [0.0, 0.0],
-                        },
-                    ]).unwrap();
+                let mut g = r.get_renderer_controller(white);
+                for _ in 0..100 {
+                    g.rect(&[0.0, 0.0, 0.0, 0.0], &[0.0, 0.0, 0.0, 0.0])
                 }
             }
-
-            g.recv_data();
+            r.recv_data();
         });
     }
 }
